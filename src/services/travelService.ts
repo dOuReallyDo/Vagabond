@@ -17,54 +17,194 @@ export interface TravelInputs {
   notes: string;
 }
 
-export const generateTravelPlan = async (inputs: TravelInputs) => {
+export type ProgressCallback = (step: string, detail?: string) => void;
+
+export const generateTravelPlan = async (
+  inputs: TravelInputs,
+  onProgress?: ProgressCallback
+) => {
+  onProgress?.("Analizzo la destinazione e il periodo...");
+
+  const totalPeople = inputs.people.adults + inputs.people.children.length;
+  const nights = Math.round(
+    (new Date(inputs.endDate).getTime() - new Date(inputs.startDate).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
   const prompt = `
-    Agisci come un esperto agente di viaggi di lusso e locale, specializzato in itinerari autentici e "slow travel". 
-    Pianifica un viaggio partendo da ${inputs.departureCity} verso ${inputs.destination}.
-    
-    Dettagli del gruppo: ${inputs.people.adults} adulti e ${inputs.people.children.length} bambini (età: ${inputs.people.children.map(c => c.age).join(', ')}).
-    Budget totale: ${inputs.budget}€ (include trasporti, alloggi e tour).
-    Periodo: dal ${inputs.startDate} al ${inputs.endDate} (${inputs.isPeriodFlexible ? 'Flessibile' : 'Fisso'}).
-    Tipologia alloggi preferita: ${inputs.accommodationType}.
-    Note e desideri dell'utente: ${inputs.notes}.
+Sei un esperto agente di viaggi con profonda conoscenza locale. Pianifica un viaggio REALE e CONCRETO.
 
-    ISTRUZIONI CRITICHE:
-    1. FONTI E LINK: Usa i tools per trovare link REALI e FUNZIONANTI. Testa la validità del link: deve essere un URL pubblico (es. wikipedia.org, lonelyplanet.com, tripadvisor.it, booking.com). Se non sei sicuro, genera un link di ricerca Google: "https://www.google.com/search?q=[nome+preciso+posto]". NON inventare mai URL.
-    2. IMMAGINI: Usa il tool googleSearch per trovare URL di immagini REALI, dirette e pubbliche. Ogni attrazione, hotel e ristorante DEVE avere un'immagine diversa e pertinente. Se non ne trovi di valide, scrivi "PLACEHOLDER".
-    3. MAPPA: Fornisci coordinate precise e un link Google Maps funzionante.
-    4. SPECIFICITÀ: Se l'utente chiede Boa Vista ad Aprile, DEVI includere l'avvistamento delle megattere con link a tour operator reali.
+VIAGGIO:
+- Partenza: ${inputs.departureCity}
+- Destinazione: ${inputs.destination}
+- Periodo: ${inputs.startDate} -> ${inputs.endDate} (${nights} notti)
+- Date flessibili: ${inputs.isPeriodFlexible ? "Sì" : "No"}
+- Gruppo: ${inputs.people.adults} adulti, ${inputs.people.children.length} bambini (età: ${inputs.people.children.map((c) => c.age).join(", ") || "N/A"})
+- Budget TOTALE: €${inputs.budget} per ${totalPeople} persone
+- Alloggio preferito: ${inputs.accommodationType}
+- Note: ${inputs.notes || "nessuna"}
 
-    Restituisci un oggetto JSON strutturato con le seguenti chiavi:
-    - budgetWarning: string | null (se il budget è troppo basso per la destinazione/gruppo, spiega perché e cosa suggerisci di tagliare)
-    - destinationOverview: { title, description, attractions: [{ name, description, sourceUrl, imageUrl, lat, lng }] }
-    - weatherInfo: { summary, pros, cons }
-    - safetyAndHealth: { safetyWarnings, vaccinationsRequired }
-    - itinerary: [{ day, title, activities: [{ time, description, costEstimate, sourceUrl, imageUrl, lat, lng }] }]
-    - budgetBreakdown: { flights, accommodation, activities, food, totalEstimated }
-    - flights: [{ airline, route, estimatedPrice, options: [string] }]
-    - accommodations: [{ stopName, options: [{ name, type, rating, reviewSummary, estimatedPricePerNight, bookingUrl, imageUrl, lat, lng }] }]
-    - bestRestaurants: [{ name, cuisineType, rating, reviewSummary, sourceUrl, imageUrl, priceRange, lat, lng }]
-    - mapPoints: [{ lat, lng, label }] (tutti i punti dell'itinerario per la mappa)
-    - overallMapUrl: string (URL di Google Maps con l'itinerario)
+REGOLE ASSOLUTE:
+1. IMMAGINI: Per ogni elemento fornisci un URL immagine da Unsplash (formato: https://source.unsplash.com/featured/800x600/?keyword-specifico-in-inglese) oppure Wikimedia Commons (https://upload.wikimedia.org/...). NON usare Google Images, Flickr, Instagram, Pinterest, loremflickr, picsum.
+2. LINK: Usa SOLO URL affidabili: wikipedia.org, tripadvisor.com, booking.com, expedia.com, viator.com. Per hotel usa booking.com. MAI inventare URL. Se non sei certo, usa: https://www.google.com/search?q=[nome+luogo+urlencoded]
+3. COORDINATE: Ogni luogo DEVE avere lat/lng precise (almeno 4 decimali). Coordinate REALI, non inventate.
+4. COSTI: Realistici. Totale non superiore a €${inputs.budget}.
+5. HOTEL REALI: Solo strutture che esistono davvero con nomi precisi.
+6. ITALIANO CORRETTO: Grammatica italiana perfetta, maiuscole corrette, nessun refuso.
+7. RISTORANTI REALI: Solo ristoranti verificabili con indirizzi reali.
 
-    VALUTAZIONE BUDGET: Se il budget di ${inputs.budget}€ è insufficiente per coprire voli da ${inputs.departureCity}, alloggi di tipo "${inputs.accommodationType}" e attività per ${inputs.people.adults + inputs.people.children.length} persone, DEVI segnalarlo nel campo "budgetWarning".
+Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
+{
+  "budgetWarning": null,
+  "destinationOverview": {
+    "title": "Nome Destinazione",
+    "tagline": "Frase ispirazionale breve",
+    "description": "Descrizione evocativa 2-3 frasi",
+    "heroImageUrl": "URL immagine panoramica da Unsplash o Wikimedia",
+    "attractions": [
+      {
+        "name": "Nome Attrazione",
+        "description": "Descrizione 2 righe con dettagli pratici",
+        "sourceUrl": "URL Wikipedia o TripAdvisor reale",
+        "imageUrl": "https://source.unsplash.com/featured/800x600/?keyword",
+        "lat": 0.0000,
+        "lng": 0.0000,
+        "category": "Cultura",
+        "estimatedVisitTime": "2 ore"
+      }
+    ]
+  },
+  "weatherInfo": {
+    "summary": "Meteo per il periodo specifico",
+    "averageTemp": "22°C",
+    "pros": "Aspetti positivi della stagione",
+    "cons": "Aspetti negativi della stagione",
+    "packingTips": "Cosa portare in valigia"
+  },
+  "safetyAndHealth": {
+    "safetyLevel": "Alto",
+    "safetyWarnings": "Avvertenze di sicurezza",
+    "vaccinationsRequired": "Vaccinazioni necessarie o nessuna",
+    "emergencyNumbers": "112 - Emergenze generali",
+    "travelInsuranceTip": "Consiglio assicurazione viaggio"
+  },
+  "itinerary": [
+    {
+      "day": 1,
+      "title": "Titolo Giornata",
+      "theme": "Tema della giornata",
+      "activities": [
+        {
+          "time": "09:00",
+          "name": "Nome Attività",
+          "description": "Descrizione dettagliata con consigli pratici",
+          "costEstimate": 25,
+          "sourceUrl": "URL affidabile",
+          "imageUrl": "https://source.unsplash.com/featured/800x600/?keyword",
+          "lat": 0.0000,
+          "lng": 0.0000,
+          "duration": "2 ore",
+          "tips": "Consiglio insider"
+        }
+      ]
+    }
+  ],
+  "budgetBreakdown": {
+    "flights": 400,
+    "accommodation": 800,
+    "activities": 300,
+    "food": 300,
+    "transport": 100,
+    "misc": 100,
+    "totalEstimated": 2000,
+    "perPersonPerDay": 66
+  },
+  "flights": [
+    {
+      "airline": "Nome compagnia aerea reale",
+      "route": "MXP -> JFK",
+      "estimatedPrice": 450,
+      "departureTime": "10:30",
+      "duration": "9h 30m",
+      "bookingUrl": "https://www.expedia.it/Flights-Search",
+      "options": ["Opzione tariffaria 1", "Opzione tariffaria 2"]
+    }
+  ],
+  "accommodations": [
+    {
+      "stopName": "Nome città tappa",
+      "options": [
+        {
+          "name": "Nome Hotel Reale",
+          "type": "Boutique Hotel",
+          "stars": 4,
+          "rating": 8.9,
+          "reviewSummary": "Recensione autentica breve",
+          "estimatedPricePerNight": 150,
+          "bookingUrl": "https://www.booking.com/searchresults.it.html?ss=nome+hotel",
+          "imageUrl": "https://source.unsplash.com/featured/800x600/?hotel+room",
+          "lat": 0.0000,
+          "lng": 0.0000,
+          "address": "Indirizzo reale",
+          "amenities": ["WiFi", "Colazione inclusa"]
+        }
+      ]
+    }
+  ],
+  "bestRestaurants": [
+    {
+      "name": "Nome Ristorante Reale",
+      "cuisineType": "Cucina locale",
+      "rating": 9.0,
+      "reviewSummary": "Recensione breve autentica",
+      "sourceUrl": "https://www.tripadvisor.it/...",
+      "imageUrl": "https://source.unsplash.com/featured/800x600/?food+restaurant",
+      "priceRange": "€€",
+      "address": "Indirizzo reale",
+      "mustTry": "Piatto da non perdere",
+      "lat": 0.0000,
+      "lng": 0.0000
+    }
+  ],
+  "mapPoints": [
+    { "lat": 0.0000, "lng": 0.0000, "label": "Nome punto", "type": "attraction" }
+  ],
+  "localTips": ["Consiglio locale 1", "Consiglio locale 2", "Consiglio locale 3"],
+  "transportInfo": {
+    "localTransport": "Come muoversi in loco",
+    "bestApps": ["App utile 1", "App utile 2"],
+    "estimatedLocalCost": "5-10€/giorno"
+  }
+}
+`;
 
-    Assicurati che i costi totali non superino il budget di ${inputs.budget}€.
-    Usa un tono ispirazionale, professionale e curato.
-  `;
+  onProgress?.("Cerco attrazioni e punti di interesse...", inputs.destination);
+  await new Promise((r) => setTimeout(r, 500));
+  onProgress?.("Verifico hotel e prezzi...");
+  await new Promise((r) => setTimeout(r, 500));
+  onProgress?.("Costruisco l'itinerario giorno per giorno...");
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente l'oggetto JSON, senza commenti o blocchi di codice markdown.",
+    contents:
+      prompt +
+      "\n\nRicorda: SOLO JSON valido, nessun testo extra, nessun blocco markdown.",
     config: {
-      tools: [{ googleSearch: {} }, { googleMaps: {} }],
+      tools: [{ googleSearch: {} }],
+      temperature: 0.3,
     },
   });
 
+  onProgress?.("Verifico link e immagini...");
+  await new Promise((r) => setTimeout(r, 400));
+  onProgress?.("Preparo la mappa interattiva...");
+  await new Promise((r) => setTimeout(r, 300));
+  onProgress?.("Il tuo viaggio è quasi pronto...");
+  await new Promise((r) => setTimeout(r, 200));
+
   const text = response.text || "";
-  // Rimuovi eventuali blocchi di codice markdown se presenti
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   const jsonStr = jsonMatch ? jsonMatch[0] : text;
-  
+
   return JSON.parse(jsonStr);
 };

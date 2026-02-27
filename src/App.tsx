@@ -3,68 +3,740 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Users, 
-  Euro, 
-  MapPin, 
-  Calendar, 
-  Home, 
-  MessageSquare, 
-  Plane, 
-  Hotel, 
-  Sun, 
-  ShieldCheck, 
-  ArrowRight, 
-  Plus, 
-  Minus,
-  Loader2,
-  Star,
-  CheckCircle2,
-  AlertTriangle,
-  ChevronRight,
-  Search
+import {
+  Users, Euro, MapPin, Calendar, Home, MessageSquare, Plane, Hotel,
+  Sun, ShieldCheck, ArrowRight, Plus, Minus, Loader2, Star,
+  CheckCircle2, AlertTriangle, ChevronRight, ExternalLink, Utensils,
+  Clock, Lightbulb, Smartphone, Train
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { generateTravelPlan, type TravelInputs } from './services/travelService';
+import { TravelMap } from './components/TravelMap';
+import 'leaflet/dist/leaflet.css';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const getImageUrl = (item: any, fallbackKeyword: string) => {
-  // Se l'IA ha fornito un URL reale e valido
-  if (item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http')) {
+// Immagine da Unsplash con keyword pertinente — niente AI generativa
+const getImageUrl = (item: any, keyword: string) => {
+  if (item?.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http')) {
     const url = item.imageUrl.trim();
-    // Evitiamo URL che sappiamo essere problematici o protetti
-    if (url.includes('google.com/imgres') || url.includes('gstatic.com') || url.includes('search?')) {
-       return `https://loremflickr.com/800/600/${encodeURIComponent(fallbackKeyword || 'travel')}?lock=${Math.floor(Math.random() * 1000)}`;
-    }
-    return url;
+    // Escludi fonti problematiche
+    const bad = ['loremflickr', 'picsum', 'google.com/imgres', 'gstatic', 'instagram', 'pinterest', 'flickr.com/photos'];
+    if (!bad.some((b) => url.includes(b))) return url;
   }
-  // Fallback dinamico usando LoremFlickr per varietà basata su keyword
-  const keyword = encodeURIComponent(fallbackKeyword || 'travel');
-  return `https://loremflickr.com/800/600/${keyword}?lock=${Math.floor(Math.random() * 1000)}`;
+  // Fallback: Unsplash con keyword specifica
+  const kw = encodeURIComponent(keyword.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().slice(0, 60));
+  return `https://source.unsplash.com/featured/800x600/?${kw}`;
 };
 
-const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   const target = e.target as HTMLImageElement;
-  // Se l'immagine fallisce, usiamo un fallback casuale basato su "travel"
-  target.src = `https://loremflickr.com/800/600/travel?lock=${Math.floor(Math.random() * 1000)}`;
-};
-
-const getSafeLink = (url: string, name: string) => {
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-    return `https://www.google.com/search?q=${encodeURIComponent(name)}`;
+  if (!target.dataset.fallback) {
+    target.dataset.fallback = '1';
+    target.src = 'https://source.unsplash.com/featured/800x600/?travel,landscape';
   }
-  return url;
 };
 
-export default function App() {
-  const [loading, setLoading] = useState(false);
-  const [plan, setPlan] = useState<any>(null);
+// Link sicuri: fallback a Google Search, mai 404
+const getSafeLink = (url: string | undefined, name: string): string => {
+  if (url && typeof url === 'string' && url.startsWith('http')) {
+    const trusted = ['wikipedia.org', 'tripadvisor', 'booking.com', 'expedia', 'viator', 'lonelyplanet', 'google.com', 'wikimedia'];
+    if (trusted.some((t) => url.includes(t))) return url;
+  }
+  return `https://www.google.com/search?q=${encodeURIComponent(name)}`;
+};
+
+const LOADING_STEPS = [
+  { icon: '🗺️', text: 'Analizzo la destinazione...', detail: 'Studio clima, attrazioni e stagionalità' },
+  { icon: '🏨', text: 'Cerco gli alloggi migliori...', detail: 'Filtro strutture per budget e preferenze' },
+  { icon: '✈️', text: 'Verifico le opzioni di volo...', detail: 'Confronto compagnie aeree e prezzi' },
+  { icon: '📍', text: 'Costruisco l\'itinerario...', detail: 'Ottimizzazione percorsi e tempistiche' },
+  { icon: '🍽️', text: 'Seleziono ristoranti locali...', detail: 'Solo locali autentici e verificati' },
+  { icon: '🗾', text: 'Preparo la mappa interattiva...', detail: 'Posiziono tutti i punti di interesse' },
+  { icon: '✅', text: 'Verifico link e immagini...', detail: 'Controllo qualità delle informazioni' },
+];
+
+// ─── LOADING SCREEN ─────────────────────────────────────────────────────────
+
+function LoadingScreen({ step }: { step: string }) {
+  const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStepIndex((i) => Math.min(i + 1, LOADING_STEPS.length - 1));
+    }, 2200);
+    return () => clearInterval(interval);
+  }, []);
+
+  const current = LOADING_STEPS[stepIndex];
+
+  return (
+    <div className="min-h-screen bg-brand-paper flex flex-col items-center justify-center p-6">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-md w-full text-center"
+      >
+        {/* Animazione centrale */}
+        <div className="relative w-32 h-32 mx-auto mb-10">
+          <div className="absolute inset-0 rounded-full border-4 border-brand-accent/20 animate-pulse" />
+          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-accent animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center text-5xl">
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={stepIndex}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                {current.icon}
+              </motion.span>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={stepIndex}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.35 }}
+          >
+            <h2 className="text-2xl mb-2">{current.text}</h2>
+            <p className="text-brand-ink/50 text-sm font-sans">{current.detail}</p>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Progress bar */}
+        <div className="mt-10 space-y-3">
+          {LOADING_STEPS.map((s, i) => (
+            <div key={i} className="flex items-center gap-3 text-left">
+              <div className={cn(
+                'w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all duration-500',
+                i < stepIndex ? 'bg-brand-accent' : i === stepIndex ? 'bg-brand-accent/40 animate-pulse' : 'bg-brand-ink/10'
+              )}>
+                {i < stepIndex && <CheckCircle2 className="w-3 h-3 text-white" />}
+              </div>
+              <span className={cn(
+                'text-xs transition-all duration-300',
+                i === stepIndex ? 'text-brand-ink font-medium' : i < stepIndex ? 'text-brand-ink/40 line-through' : 'text-brand-ink/20'
+              )}>
+                {s.text}
+              </span>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ─── STAR RATING ─────────────────────────────────────────────────────────────
+
+function StarRating({ value }: { value: number }) {
+  const normalized = Math.min(5, value > 5 ? value / 2 : value);
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={cn('w-3 h-3', i <= Math.round(normalized) ? 'fill-amber-400 text-amber-400' : 'text-gray-200')}
+        />
+      ))}
+      <span className="text-xs text-gray-500 ml-1">{value}</span>
+    </div>
+  );
+}
+
+// ─── CARD IMMAGINE CON LINK VERIFICATO ───────────────────────────────────────
+
+interface ImageCardProps {
+  imageUrl?: string;
+  imageKeyword: string;
+  href: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+function ImageCard({ imageUrl, imageKeyword, href, children, className }: ImageCardProps) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn('group block bg-white rounded-3xl shadow-sm border border-brand-ink/5 hover:shadow-lg transition-all duration-300 overflow-hidden', className)}
+    >
+      <div className="h-52 overflow-hidden relative">
+        <img
+          src={getImageUrl({ imageUrl }, imageKeyword)}
+          alt={imageKeyword}
+          onError={handleImageError}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg text-[10px] font-bold text-brand-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <ExternalLink className="w-2.5 h-2.5" /> Apri
+        </div>
+      </div>
+      {children}
+    </a>
+  );
+}
+
+// ─── BADGE CATEGORIA ─────────────────────────────────────────────────────────
+
+function Badge({ children, color = 'default' }: { children: React.ReactNode; color?: string }) {
+  const colors: Record<string, string> = {
+    default: 'bg-brand-ink/5 text-brand-ink/60',
+    green: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700',
+    blue: 'bg-blue-50 text-blue-700',
+    red: 'bg-red-50 text-red-700',
+  };
+  return (
+    <span className={cn('text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md', colors[color] || colors.default)}>
+      {children}
+    </span>
+  );
+}
+
+// ─── RESULTS VIEW ─────────────────────────────────────────────────────────────
+
+function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
+  const heroUrl = getImageUrl({ imageUrl: plan.destinationOverview?.heroImageUrl }, plan.destinationOverview?.title + ' landscape');
+
+  // Costruisci mapPoints aggregando tutti i punti con coordinate valide
+  const allMapPoints = [
+    ...(plan.mapPoints || []),
+    ...(plan.destinationOverview?.attractions || []).map((a: any) => ({
+      lat: a.lat, lng: a.lng, label: a.name, type: 'attraction'
+    })),
+    ...(plan.accommodations || []).flatMap((s: any) =>
+      (s.options || []).map((h: any) => ({ lat: h.lat, lng: h.lng, label: h.name, type: 'hotel' }))
+    ),
+    ...(plan.bestRestaurants || []).map((r: any) => ({ lat: r.lat, lng: r.lng, label: r.name, type: 'restaurant' })),
+  ].filter((p: any) => p.lat && p.lng && p.lat !== 0 && p.lng !== 0 && !isNaN(p.lat) && !isNaN(p.lng));
+
+  return (
+    <div className="min-h-screen bg-brand-paper pb-24">
+      {/* HERO */}
+      <section className="relative h-[85vh] overflow-hidden">
+        <img
+          src={heroUrl}
+          alt={plan.destinationOverview?.title}
+          onError={handleImageError}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-brand-paper" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent" />
+
+        <button
+          onClick={onReset}
+          className="absolute top-8 left-8 bg-white/90 backdrop-blur px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-white transition-colors shadow-md z-10"
+        >
+          <ArrowRight className="rotate-180 w-4 h-4" /> Nuova ricerca
+        </button>
+
+        <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-16 lg:p-24">
+          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl">
+            {plan.destinationOverview?.tagline && (
+              <p className="text-white/70 text-sm font-sans uppercase tracking-[0.2em] mb-3">
+                {plan.destinationOverview.tagline}
+              </p>
+            )}
+            <h1 className="text-7xl md:text-[7rem] text-white leading-none mb-6 drop-shadow-lg">
+              {plan.destinationOverview?.title}
+            </h1>
+            <p className="text-xl text-white/85 font-serif italic max-w-2xl leading-relaxed">
+              {plan.destinationOverview?.description}
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-6 pt-4">
+
+        {/* BUDGET WARNING */}
+        {plan.budgetWarning && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-12 bg-amber-50 border-2 border-amber-200 p-8 rounded-[2rem] flex items-start gap-5 shadow-sm"
+          >
+            <div className="p-3 bg-amber-100 rounded-2xl shrink-0">
+              <AlertTriangle className="w-6 h-6 text-amber-700" />
+            </div>
+            <div>
+              <h3 className="text-xl font-serif mb-2 text-amber-900">Nota sul budget</h3>
+              <p className="text-amber-800 leading-relaxed">{plan.budgetWarning}</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ATTRAZIONI */}
+        <section className="mb-20">
+          <h2 className="text-5xl mb-2">Da vedere</h2>
+          <p className="text-brand-ink/50 mb-8 font-sans text-sm">Le attrazioni imperdibili della destinazione</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {(plan.destinationOverview?.attractions || []).map((attr: any, i: number) => (
+              <motion.a
+                key={i}
+                href={getSafeLink(attr.sourceUrl, attr.name)}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                className="group relative aspect-[4/5] overflow-hidden rounded-3xl shadow-md block hover:shadow-xl transition-shadow"
+              >
+                <img
+                  src={getImageUrl(attr, attr.name + ' ' + (attr.category || 'travel'))}
+                  alt={attr.name}
+                  onError={handleImageError}
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent p-6 flex flex-col justify-end">
+                  {attr.category && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-2">{attr.category}</span>
+                  )}
+                  <h3 className="text-2xl text-white mb-2 leading-tight">
+                    {attr.name}
+                  </h3>
+                  <p className="text-white/70 text-sm leading-relaxed line-clamp-3">{attr.description}</p>
+                  {attr.estimatedVisitTime && (
+                    <div className="mt-3 flex items-center gap-1.5 text-white/50 text-xs">
+                      <Clock className="w-3 h-3" /> {attr.estimatedVisitTime}
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center gap-1.5 text-[10px] text-white/40 font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ExternalLink className="w-3 h-3" /> Scopri di più
+                  </div>
+                </div>
+              </motion.a>
+            ))}
+          </div>
+        </section>
+
+        {/* METEO + SICUREZZA */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-20">
+          {/* Meteo */}
+          <div className="glass p-8 rounded-[2rem] lg:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-amber-50 rounded-2xl">
+                <Sun className="text-amber-500 w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-3xl">Meteo e stagione</h2>
+                {plan.weatherInfo?.averageTemp && (
+                  <p className="text-brand-ink/40 text-sm">{plan.weatherInfo.averageTemp} in media</p>
+                )}
+              </div>
+            </div>
+            <p className="text-brand-ink/80 leading-relaxed mb-6">{plan.weatherInfo?.summary}</p>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-emerald-50 p-4 rounded-2xl">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 block mb-2">Punti di forza</span>
+                <p className="text-sm text-emerald-900 leading-relaxed">{plan.weatherInfo?.pros}</p>
+              </div>
+              <div className="bg-amber-50 p-4 rounded-2xl">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 block mb-2">Da tenere a mente</span>
+                <p className="text-sm text-amber-900 leading-relaxed">{plan.weatherInfo?.cons}</p>
+              </div>
+            </div>
+            {plan.weatherInfo?.packingTips && (
+              <div className="bg-blue-50 p-4 rounded-2xl">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 block mb-2">Cosa mettere in valigia</span>
+                <p className="text-sm text-blue-900 leading-relaxed">{plan.weatherInfo.packingTips}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Sicurezza */}
+          <div className="glass p-8 rounded-[2rem]">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-emerald-50 rounded-2xl">
+                <ShieldCheck className="text-emerald-600 w-6 h-6" />
+              </div>
+              <h2 className="text-3xl">Sicurezza</h2>
+            </div>
+            {plan.safetyAndHealth?.safetyLevel && (
+              <div className="mb-4">
+                <Badge color={plan.safetyAndHealth.safetyLevel === 'Alto' ? 'green' : plan.safetyAndHealth.safetyLevel === 'Basso' ? 'red' : 'amber'}>
+                  Livello {plan.safetyAndHealth.safetyLevel}
+                </Badge>
+              </div>
+            )}
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-1">Avvertenze</p>
+                <p className="text-brand-ink/80 leading-relaxed">{plan.safetyAndHealth?.safetyWarnings}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-1">Vaccinazioni</p>
+                <p className="text-brand-ink/80 leading-relaxed">{plan.safetyAndHealth?.vaccinationsRequired}</p>
+              </div>
+              {plan.safetyAndHealth?.emergencyNumbers && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-1">Numeri utili</p>
+                  <p className="text-brand-ink/80 leading-relaxed">{plan.safetyAndHealth.emergencyNumbers}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* BUDGET BREAKDOWN */}
+        <section className="glass p-8 md:p-12 rounded-[2rem] mb-20">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="p-3 bg-brand-accent/10 rounded-2xl">
+              <Euro className="text-brand-accent w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-4xl">Budget stimato</h2>
+              <p className="text-brand-ink/40 text-sm">Stime basate sui prezzi medi del periodo</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            {[
+              { label: 'Voli', icon: Plane, key: 'flights', color: 'bg-blue-50 text-blue-600' },
+              { label: 'Alloggi', icon: Hotel, key: 'accommodation', color: 'bg-purple-50 text-purple-600' },
+              { label: 'Attività', icon: MapPin, key: 'activities', color: 'bg-green-50 text-green-600' },
+              { label: 'Cibo', icon: Utensils, key: 'food', color: 'bg-orange-50 text-orange-600' },
+              { label: 'Trasporti', icon: Train, key: 'transport', color: 'bg-cyan-50 text-cyan-600' },
+              { label: 'Extra', icon: Euro, key: 'misc', color: 'bg-gray-50 text-gray-600' },
+            ].map((item) => (
+              <div key={item.key} className={cn('p-5 rounded-2xl text-center', item.color.split(' ')[0])}>
+                <item.icon className={cn('w-5 h-5 mx-auto mb-2', item.color.split(' ')[1])} />
+                <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+                <p className="text-xl font-bold text-gray-800">€{plan.budgetBreakdown?.[item.key] ?? '—'}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-6 border-t border-brand-ink/10">
+            <span className="text-2xl font-serif italic text-brand-ink/60">Totale stimato</span>
+            <div className="text-right">
+              <span className="text-4xl font-bold text-brand-accent">€{plan.budgetBreakdown?.totalEstimated}</span>
+              {plan.budgetBreakdown?.perPersonPerDay && (
+                <p className="text-xs text-brand-ink/40 mt-1">≈ €{plan.budgetBreakdown.perPersonPerDay} / persona / giorno</p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ITINERARIO */}
+        <section className="mb-20">
+          <h2 className="text-5xl mb-2">Il tuo itinerario</h2>
+          <p className="text-brand-ink/50 mb-12 font-sans text-sm">Ogni giornata pensata per vivere la destinazione in modo autentico</p>
+
+          <div className="space-y-16">
+            {(plan.itinerary || []).map((day: any, i: number) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="relative pl-8 md:pl-20"
+              >
+                <div className="absolute left-0 top-0 bottom-0 w-px bg-brand-ink/10" />
+                <div className="absolute left-[-8px] top-2 w-4 h-4 rounded-full bg-brand-accent ring-4 ring-brand-paper" />
+
+                <div className="mb-6">
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-brand-accent">
+                      Giorno {day.day}
+                    </span>
+                    {day.theme && <Badge>{day.theme}</Badge>}
+                  </div>
+                  <h3 className="text-4xl">{day.title}</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {(day.activities || []).map((act: any, j: number) => (
+                    <a
+                      key={j}
+                      href={getSafeLink(act.sourceUrl, act.name || act.description)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group bg-white rounded-3xl border border-brand-ink/5 hover:shadow-md transition-all overflow-hidden block"
+                    >
+                      {(act.imageUrl || act.name) && (
+                        <div className="h-44 overflow-hidden">
+                          <img
+                            src={getImageUrl({ imageUrl: act.imageUrl }, (act.name || act.description || 'travel') + ' ' + (plan.destinationOverview?.title || ''))}
+                            alt={act.name || act.description}
+                            onError={handleImageError}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+                      <div className="p-6">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono bg-brand-paper px-2 py-0.5 rounded-md text-brand-ink/60">{act.time}</span>
+                            {act.duration && (
+                              <span className="text-xs text-brand-ink/40 flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> {act.duration}
+                              </span>
+                            )}
+                          </div>
+                          {act.costEstimate !== undefined && (
+                            <span className="text-sm font-bold text-brand-accent">
+                              {act.costEstimate === 0 ? 'Gratis' : `€${act.costEstimate}`}
+                            </span>
+                          )}
+                        </div>
+                        {act.name && <h4 className="text-lg font-serif mb-2 leading-tight">{act.name}</h4>}
+                        <p className="text-brand-ink/70 text-sm leading-relaxed">{act.description}</p>
+                        {act.tips && (
+                          <div className="mt-3 flex items-start gap-2 bg-amber-50 p-3 rounded-xl">
+                            <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-800 leading-relaxed">{act.tips}</p>
+                          </div>
+                        )}
+                        <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest">
+                          <ExternalLink className="w-3 h-3" /> Verifica sul web
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* MAPPA INTERATTIVA */}
+        {allMapPoints.length > 0 && (
+          <section className="mb-20">
+            <h2 className="text-5xl mb-2">Mappa dell'itinerario</h2>
+            <p className="text-brand-ink/50 mb-8 font-sans text-sm">
+              {allMapPoints.length} punti di interesse — la linea tratteggiata mostra il percorso suggerito
+            </p>
+            <div className="rounded-[2rem] overflow-hidden shadow-xl border border-brand-ink/5">
+              <TravelMap points={allMapPoints} destination={plan.destinationOverview?.title || ''} />
+            </div>
+          </section>
+        )}
+
+        {/* VOLI */}
+        <section className="mb-20">
+          <h2 className="text-4xl mb-2 flex items-center gap-3">
+            <Plane className="w-7 h-7" /> Voli suggeriti
+          </h2>
+          <p className="text-brand-ink/50 mb-8 font-sans text-sm">Prezzi indicativi — verifica disponibilità sulle piattaforme di prenotazione</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {(plan.flights || []).map((flight: any, i: number) => (
+              <a
+                key={i}
+                href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="glass p-7 rounded-3xl hover:shadow-md transition-all group block"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="font-bold text-xl">{flight.airline}</p>
+                    <p className="text-brand-ink/50 text-sm mt-0.5">{flight.route}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-brand-accent">€{flight.estimatedPrice}</p>
+                    {flight.duration && <p className="text-xs text-brand-ink/40">{flight.duration}</p>}
+                  </div>
+                </div>
+                {(flight.options || []).length > 0 && (
+                  <ul className="space-y-1.5 mt-4 pt-4 border-t border-brand-ink/5">
+                    {flight.options.map((opt: string, j: number) => (
+                      <li key={j} className="text-sm text-brand-ink/60 flex items-center gap-2">
+                        <ChevronRight className="w-3 h-3 text-brand-accent shrink-0" /> {opt}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                  <ExternalLink className="w-3 h-3" /> Cerca voli
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        {/* ALLOGGI */}
+        <section className="mb-20">
+          <h2 className="text-4xl mb-2 flex items-center gap-3">
+            <Hotel className="w-7 h-7" /> Alloggi consigliati
+          </h2>
+          <p className="text-brand-ink/50 mb-10 font-sans text-sm">Strutture selezionate in base alle tue preferenze</p>
+          <div className="space-y-14">
+            {(plan.accommodations || []).map((stop: any, i: number) => (
+              <div key={i}>
+                <h3 className="text-2xl mb-6 text-brand-accent italic flex items-center gap-2">
+                  <MapPin className="w-5 h-5" /> {stop.stopName}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {(stop.options || []).map((hotel: any, j: number) => (
+                    <ImageCard
+                      key={j}
+                      imageUrl={hotel.imageUrl}
+                      imageKeyword={hotel.name + ' hotel room interior'}
+                      href={getSafeLink(hotel.bookingUrl, hotel.name + ' hotel')}
+                    >
+                      <div className="p-6">
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="text-lg font-serif leading-tight group-hover:text-brand-accent transition-colors pr-2">
+                            {hotel.name}
+                          </h4>
+                          {hotel.stars && (
+                            <div className="flex shrink-0">
+                              {Array.from({ length: hotel.stars }).map((_, k) => (
+                                <Star key={k} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{hotel.type}</p>
+                        {hotel.rating && <StarRating value={hotel.rating} />}
+                        {hotel.address && (
+                          <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
+                            <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {hotel.address}
+                          </p>
+                        )}
+                        <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
+                          "{hotel.reviewSummary}"
+                        </p>
+                        {(hotel.amenities || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-3">
+                            {hotel.amenities.slice(0, 3).map((a: string, k: number) => (
+                              <Badge key={k}>{a}</Badge>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
+                          <span className="text-xs text-brand-ink/40">per notte</span>
+                          <span className="font-bold text-lg">€{hotel.estimatedPricePerNight}</span>
+                        </div>
+                      </div>
+                    </ImageCard>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* RISTORANTI */}
+        {plan.bestRestaurants?.length > 0 && (
+          <section className="mb-20">
+            <h2 className="text-4xl mb-2 flex items-center gap-3">
+              <Utensils className="w-7 h-7" /> Dove mangiare
+            </h2>
+            <p className="text-brand-ink/50 mb-10 font-sans text-sm">Ristoranti locali autentici, selezionati per qualità e genuinità</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {plan.bestRestaurants.map((rest: any, i: number) => (
+                <ImageCard
+                  key={i}
+                  imageUrl={rest.imageUrl}
+                  imageKeyword={rest.name + ' food restaurant ' + rest.cuisineType}
+                  href={getSafeLink(rest.sourceUrl, rest.name + ' ristorante')}
+                >
+                  <div className="p-6">
+                    <h4 className="text-lg font-serif mb-0.5 group-hover:text-brand-accent transition-colors">{rest.name}</h4>
+                    <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{rest.cuisineType}</p>
+                    {rest.rating && <StarRating value={rest.rating} />}
+                    {rest.address && (
+                      <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
+                        <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {rest.address}
+                      </p>
+                    )}
+                    <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
+                      "{rest.reviewSummary}"
+                    </p>
+                    {rest.mustTry && (
+                      <div className="mt-3 bg-orange-50 p-3 rounded-xl">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-0.5">Da provare</p>
+                        <p className="text-xs text-orange-800">{rest.mustTry}</p>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
+                      <span className="text-xs text-brand-ink/40">Fascia di prezzo</span>
+                      <span className="font-bold">{rest.priceRange}</span>
+                    </div>
+                  </div>
+                </ImageCard>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* CONSIGLI LOCALI + TRASPORTI */}
+        {(plan.localTips?.length > 0 || plan.transportInfo) && (
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-20">
+            {plan.localTips?.length > 0 && (
+              <div className="glass p-8 rounded-[2rem]">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 bg-yellow-50 rounded-2xl">
+                    <Lightbulb className="w-6 h-6 text-yellow-500" />
+                  </div>
+                  <h2 className="text-3xl">Consigli locali</h2>
+                </div>
+                <ul className="space-y-4">
+                  {plan.localTips.map((tip: string, i: number) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <p className="text-brand-ink/80 text-sm leading-relaxed">{tip}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {plan.transportInfo && (
+              <div className="glass p-8 rounded-[2rem]">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 bg-cyan-50 rounded-2xl">
+                    <Train className="w-6 h-6 text-cyan-600" />
+                  </div>
+                  <h2 className="text-3xl">Come muoversi</h2>
+                </div>
+                <p className="text-brand-ink/80 leading-relaxed mb-6 text-sm">{plan.transportInfo.localTransport}</p>
+                {plan.transportInfo.bestApps?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-3 flex items-center gap-2">
+                      <Smartphone className="w-3 h-3" /> App consigliate
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {plan.transportInfo.bestApps.map((app: string, i: number) => (
+                        <Badge key={i} color="blue">{app}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {plan.transportInfo.estimatedLocalCost && (
+                  <p className="mt-4 text-sm text-brand-ink/60 border-t border-brand-ink/5 pt-4">
+                    Costo locale stimato: <strong>{plan.transportInfo.estimatedLocalCost}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── FORM VIEW ────────────────────────────────────────────────────────────────
+
+function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean }) {
   const [inputs, setInputs] = useState<TravelInputs>({
     people: { adults: 2, children: [] },
     budget: 2000,
@@ -74,566 +746,118 @@ export default function App() {
     endDate: '',
     isPeriodFlexible: false,
     accommodationType: 'Hotel di charme',
-    notes: ''
+    notes: '',
   });
 
-  const handleAddChild = () => {
-    setInputs(prev => ({
-      ...prev,
-      people: {
-        ...prev.people,
-        children: [...prev.people.children, { age: 5 }]
-      }
-    }));
-  };
+  const handleAddChild = () =>
+    setInputs((p) => ({ ...p, people: { ...p.people, children: [...p.people.children, { age: 8 }] } }));
 
-  const handleRemoveChild = (index: number) => {
-    setInputs(prev => ({
-      ...prev,
-      people: {
-        ...prev.people,
-        children: prev.people.children.filter((_, i) => i !== index)
-      }
-    }));
-  };
+  const handleRemoveChild = (i: number) =>
+    setInputs((p) => ({ ...p, people: { ...p.people, children: p.people.children.filter((_, j) => j !== i) } }));
 
-  const handleChildAgeChange = (index: number, age: number) => {
-    setInputs(prev => {
-      const newChildren = [...prev.people.children];
-      newChildren[index].age = age;
-      return {
-        ...prev,
-        people: { ...prev.people, children: newChildren }
-      };
+  const handleChildAge = (i: number, age: number) =>
+    setInputs((p) => {
+      const c = [...p.people.children];
+      c[i].age = age;
+      return { ...p, people: { ...p.people, children: c } };
     });
-  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const result = await generateTravelPlan(inputs);
-      setPlan(result);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
-      console.error("Error generating plan:", error);
-      alert("Si è verificato un errore durante la generazione del piano. Riprova.");
-    } finally {
-      setLoading(false);
-    }
+    onSubmit(inputs);
   };
-
-  if (plan) {
-    return (
-      <div className="min-h-screen bg-brand-paper pb-20">
-        {/* Hero Section */}
-        <section className="relative h-[80vh] overflow-hidden">
-          <img 
-            src={`https://picsum.photos/seed/${plan.destinationOverview.title}/1920/1080`}
-            alt={plan.destinationOverview.title}
-            className="absolute inset-0 w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-brand-paper" />
-          <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-20">
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="max-w-4xl"
-            >
-              <h1 className="text-6xl md:text-9xl text-white mb-4 leading-none">
-                {plan.destinationOverview.title}
-              </h1>
-              <p className="text-xl md:text-2xl text-white/90 font-serif italic max-w-2xl">
-                {plan.destinationOverview.description}
-              </p>
-            </motion.div>
-          </div>
-          <button 
-            onClick={() => setPlan(null)}
-            className="absolute top-8 left-8 glass px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-white transition-colors"
-          >
-            <ArrowRight className="rotate-180 w-4 h-4" />
-            Nuova Ricerca
-          </button>
-        </section>
-
-        <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10">
-          {/* Budget Warning */}
-          {plan.budgetWarning && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-12 bg-red-50 border-2 border-red-200 p-8 rounded-[2rem] flex items-start gap-6 shadow-xl"
-            >
-              <div className="p-4 bg-red-100 rounded-2xl">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-2xl text-red-900 mb-2">Attenzione al Budget</h3>
-                <p className="text-red-800 text-lg leading-relaxed">{plan.budgetWarning}</p>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Attractions Grid */}
-          <section className="mb-20">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {plan.destinationOverview.attractions.map((attr: any, i: number) => (
-                <motion.a 
-                  key={i}
-                  href={getSafeLink(attr.sourceUrl, attr.name)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="group relative aspect-[4/5] overflow-hidden rounded-3xl shadow-xl block"
-                >
-                  <img 
-                    src={getImageUrl(attr, attr.name)}
-                    alt={attr.name}
-                    onError={handleImageError}
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 flex flex-col justify-end">
-                    <h3 className="text-2xl text-white mb-2 flex items-center gap-2">
-                      {attr.name} <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </h3>
-                    <p className="text-white/70 text-sm line-clamp-2">{attr.description}</p>
-                    <div className="mt-4 flex gap-2">
-                      <span className="text-[10px] text-white/40 uppercase tracking-widest border border-white/20 px-2 py-1 rounded flex items-center gap-1">
-                        <Search className="w-3 h-3" /> Vedi Dettagli
-                      </span>
-                    </div>
-                  </div>
-                </motion.a>
-              ))}
-            </div>
-          </section>
-
-          {/* Weather & Safety */}
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-20">
-            <div className="space-y-8">
-              <div className="glass p-8 rounded-[2rem]">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-3 bg-brand-accent/10 rounded-2xl">
-                    <Sun className="text-brand-accent w-6 h-6" />
-                  </div>
-                  <h2 className="text-3xl">Meteo & Periodo</h2>
-                </div>
-                <p className="text-lg mb-6 text-brand-ink/80">{plan.weatherInfo.summary}</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-emerald-50 p-4 rounded-2xl">
-                    <span className="text-xs uppercase tracking-wider font-bold text-emerald-700 block mb-2">Pro</span>
-                    <p className="text-sm text-emerald-900">{plan.weatherInfo.pros}</p>
-                  </div>
-                  <div className="bg-amber-50 p-4 rounded-2xl">
-                    <span className="text-xs uppercase tracking-wider font-bold text-amber-700 block mb-2">Contro</span>
-                    <p className="text-sm text-amber-900">{plan.weatherInfo.cons}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass p-8 rounded-[2rem]">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-3 bg-brand-accent/10 rounded-2xl">
-                    <ShieldCheck className="text-brand-accent w-6 h-6" />
-                  </div>
-                  <h2 className="text-3xl">Sicurezza & Salute</h2>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex gap-4">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                    <div>
-                      <p className="font-bold text-sm uppercase text-brand-ink/50">Avvertenze</p>
-                      <p>{plan.safetyAndHealth.safetyWarnings}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <div>
-                      <p className="font-bold text-sm uppercase text-brand-ink/50">Vaccinazioni</p>
-                      <p>{plan.safetyAndHealth.vaccinationsRequired}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Budget Breakdown */}
-            <div className="glass p-8 rounded-[2rem] h-full">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="p-3 bg-brand-accent/10 rounded-2xl">
-                  <Euro className="text-brand-accent w-6 h-6" />
-                </div>
-                <h2 className="text-3xl">Budget Stimato</h2>
-              </div>
-              <div className="space-y-6">
-                {[
-                  { label: 'Voli', value: plan.budgetBreakdown.flights, icon: Plane },
-                  { label: 'Alloggi', value: plan.budgetBreakdown.accommodation, icon: Hotel },
-                  { label: 'Attività', value: plan.budgetBreakdown.activities, icon: MapPin },
-                  { label: 'Cibo & Altro', value: plan.budgetBreakdown.food, icon: Users },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center justify-between border-b border-brand-ink/5 pb-4">
-                    <div className="flex items-center gap-4">
-                      <item.icon className="w-5 h-5 opacity-40" />
-                      <span className="text-lg">{item.label}</span>
-                    </div>
-                    <span className="text-xl font-medium">{item.value}€</span>
-                  </div>
-                ))}
-                <div className="pt-4 flex items-center justify-between">
-                  <span className="text-2xl font-serif italic">Totale Stimato</span>
-                  <span className="text-3xl font-bold text-brand-accent">{plan.budgetBreakdown.totalEstimated}€</span>
-                </div>
-                <p className="text-xs text-brand-ink/40 text-center italic">
-                  *I costi sono stime basate sui prezzi medi del periodo scelto.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Itinerary */}
-          <section className="mb-20">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-              <h2 className="text-5xl">Il Tuo Itinerario</h2>
-              <div className="flex gap-4">
-                {plan.overallMapUrl && (
-                  <a 
-                    href={plan.overallMapUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="glass px-6 py-3 rounded-2xl flex items-center gap-3 hover:bg-brand-accent hover:text-white transition-all group"
-                  >
-                    <MapPin className="w-5 h-5 text-brand-accent group-hover:text-white" />
-                    <span className="font-bold">Apri Mappa Completa</span>
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {/* Map Embed */}
-            <div className="mb-12 rounded-[2rem] overflow-hidden shadow-2xl h-[400px] border border-brand-ink/10">
-              <iframe 
-                width="100%" 
-                height="100%" 
-                style={{ border: 0 }} 
-                loading="lazy" 
-                allowFullScreen 
-                referrerPolicy="no-referrer-when-downgrade"
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(plan.destinationOverview.title)}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-              />
-            </div>
-
-            <div className="space-y-12">
-              {plan.itinerary.map((day: any, i: number) => (
-                <div key={i} className="relative pl-12 md:pl-24">
-                  <div className="absolute left-0 top-0 bottom-0 w-px bg-brand-ink/10" />
-                  <div className="absolute left-[-8px] top-0 w-4 h-4 rounded-full bg-brand-accent" />
-                  <div className="mb-8">
-                    <span className="text-brand-accent font-bold tracking-widest uppercase text-sm">Giorno {day.day}</span>
-                    <h3 className="text-4xl mt-2">{day.title}</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {day.activities.map((act: any, j: number) => (
-                      <a 
-                        key={j} 
-                        href={getSafeLink(act.sourceUrl, act.description)} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="bg-white rounded-3xl shadow-sm border border-brand-ink/5 hover:shadow-md transition-all group block overflow-hidden"
-                      >
-                        {(act.imageUrl || act.imageSearchKeyword) && (
-                          <div className="h-48 overflow-hidden">
-                            <img 
-                              src={getImageUrl(act, act.imageSearchKeyword || act.description)}
-                              alt={act.description}
-                              onError={handleImageError}
-                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                              referrerPolicy="no-referrer"
-                            />
-                          </div>
-                        )}
-                        <div className="p-6">
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-xs font-mono bg-brand-paper px-2 py-1 rounded-md w-fit">{act.time}</span>
-                              {act.lat && act.lng && (
-                                <span className="text-[10px] text-brand-accent flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" /> Posizione verificata
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-brand-accent">{act.costEstimate}€</span>
-                              <ChevronRight className="w-4 h-4 text-brand-accent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </div>
-                          <p className="text-brand-ink/80 leading-relaxed mb-4">{act.description}</p>
-                          <div className="flex items-center gap-2 text-[10px] text-brand-accent font-bold uppercase tracking-widest">
-                            <Search className="w-3 h-3" /> Verifica su Google
-                          </div>
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Flights & Accommodations */}
-          <section className="space-y-20">
-            <div>
-              <h2 className="text-4xl mb-8 flex items-center gap-4">
-                <Plane className="w-8 h-8" /> Voli Suggeriti
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {plan.flights.map((flight: any, i: number) => (
-                  <div key={i} className="glass p-6 rounded-3xl">
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="font-bold text-xl">{flight.airline}</span>
-                      <span className="text-brand-accent font-bold">{flight.estimatedPrice}€</span>
-                    </div>
-                    <p className="text-brand-ink/60 mb-4">{flight.route}</p>
-                    <ul className="space-y-2">
-                      {flight.options.map((opt: string, j: number) => (
-                        <li key={j} className="text-sm flex items-center gap-2">
-                          <ChevronRight className="w-3 h-3 text-brand-accent" /> {opt}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-4xl mb-8 flex items-center gap-4">
-                <Hotel className="w-8 h-8" /> Alloggi Consigliati
-              </h2>
-              <div className="space-y-12">
-                {plan.accommodations.map((stop: any, i: number) => (
-                  <div key={i}>
-                    <h3 className="text-2xl mb-6 text-brand-accent italic">Tappa: {stop.stopName}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {stop.options.map((hotel: any, j: number) => (
-                        <a 
-                          key={j} 
-                          href={getSafeLink(hotel.bookingUrl, hotel.name)} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="bg-white rounded-3xl shadow-sm hover:shadow-md transition-all border border-brand-ink/5 block group overflow-hidden"
-                        >
-                          <div className="h-48 overflow-hidden relative">
-                            <img 
-                              src={getImageUrl(hotel, hotel.name)}
-                              alt={hotel.name}
-                              onError={handleImageError}
-                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-2 py-1 rounded-lg flex items-center gap-1 text-amber-500 shadow-sm">
-                              <Star className="w-3 h-3 fill-current" />
-                              <span className="text-xs font-bold">{hotel.rating}</span>
-                            </div>
-                          </div>
-                          <div className="p-6">
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="text-xl font-bold leading-tight group-hover:text-brand-accent transition-colors">{hotel.name}</h4>
-                            </div>
-                            <p className="text-xs text-brand-ink/40 uppercase tracking-widest mb-4">{hotel.type}</p>
-                            {hotel.lat && hotel.lng && (
-                              <div className="flex items-center gap-1 text-[10px] text-brand-accent mb-2">
-                                <MapPin className="w-3 h-3" /> Posizione verificata
-                              </div>
-                            )}
-                            <p className="text-sm text-brand-ink/70 mb-6 italic">"{hotel.reviewSummary}"</p>
-                            <div className="flex justify-between items-center pt-4 border-t border-brand-ink/5">
-                              <span className="text-xs text-brand-ink/40">Prezzo stimato</span>
-                              <span className="font-bold">{hotel.estimatedPricePerNight}€ / notte</span>
-                            </div>
-                            <div className="mt-4 flex items-center gap-2 text-[10px] text-brand-accent font-bold uppercase tracking-widest">
-                              <Search className="w-3 h-3" /> Controlla Disponibilità
-                            </div>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {plan.bestRestaurants && (
-              <div>
-                <h2 className="text-4xl mb-8 flex items-center gap-4">
-                  <Users className="w-8 h-8" /> Migliori Ristoranti Locali
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {plan.bestRestaurants.map((rest: any, i: number) => (
-                    <a 
-                      key={i} 
-                      href={getSafeLink(rest.sourceUrl, rest.name)} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="bg-white rounded-3xl shadow-sm hover:shadow-md transition-all border border-brand-ink/5 block group overflow-hidden"
-                    >
-                      <div className="h-48 overflow-hidden relative">
-                        <img 
-                          src={getImageUrl(rest, rest.name)}
-                          alt={rest.name}
-                          onError={handleImageError}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-2 py-1 rounded-lg flex items-center gap-1 text-amber-500 shadow-sm">
-                          <Star className="w-3 h-3 fill-current" />
-                          <span className="text-xs font-bold">{rest.rating}</span>
-                        </div>
-                      </div>
-                      <div className="p-6">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="text-xl font-bold leading-tight group-hover:text-brand-accent transition-colors">{rest.name}</h4>
-                        </div>
-                        <p className="text-xs text-brand-ink/40 uppercase tracking-widest mb-2">{rest.cuisineType}</p>
-                        {rest.lat && rest.lng && (
-                          <div className="flex items-center gap-1 text-[10px] text-brand-accent mb-2">
-                            <MapPin className="w-3 h-3" /> Posizione verificata
-                          </div>
-                        )}
-                        <p className="text-sm text-brand-ink/70 mb-6 italic">"{rest.reviewSummary}"</p>
-                        <div className="flex justify-between items-center pt-4 border-t border-brand-ink/5">
-                          <span className="text-xs text-brand-ink/40">Fascia di prezzo</span>
-                          <span className="font-bold">{rest.priceRange}</span>
-                        </div>
-                        <div className="mt-4 flex items-center gap-2 text-[10px] text-brand-accent font-bold uppercase tracking-widest">
-                          <Search className="w-3 h-3" /> Leggi Recensioni
-                        </div>
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-brand-paper flex flex-col items-center justify-center p-6">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-2xl w-full"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl w-full">
         <div className="text-center mb-12">
-          <h1 className="text-6xl md:text-8xl mb-4">Vagabond AI</h1>
-          <p className="text-xl md:text-2xl font-serif italic text-brand-ink/60">
-            Il tuo agente di viaggio personale, per esperienze autentiche.
+          <h1 className="text-7xl md:text-9xl mb-4 leading-none">Vagabond</h1>
+          <p className="text-lg md:text-xl font-serif italic text-brand-ink/50">
+            Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="glass p-8 md:p-12 rounded-[3rem] shadow-2xl space-y-8">
-          {/* Departure & Destination */}
+        <form onSubmit={handleSubmit} className="glass p-8 md:p-12 rounded-[3rem] shadow-2xl space-y-10">
+
+          {/* Partenza & Destinazione */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-brand-ink/40">
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
                 <Plane className="w-3 h-3" /> Da dove parti?
               </label>
-              <input 
+              <input
                 required
                 type="text"
-                placeholder="Città, Nazione"
-                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-4 text-2xl focus:border-brand-accent outline-none transition-colors"
+                placeholder="Milano, Roma…"
+                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-2xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
                 value={inputs.departureCity}
-                onChange={e => setInputs(prev => ({ ...prev, departureCity: e.target.value }))}
+                onChange={(e) => setInputs((p) => ({ ...p, departureCity: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-brand-ink/40">
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
                 <MapPin className="w-3 h-3" /> Dove vuoi andare?
               </label>
-              <input 
+              <input
                 required
                 type="text"
-                placeholder="Es: Islanda, Bali..."
-                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-4 text-2xl focus:border-brand-accent outline-none transition-colors"
+                placeholder="Islanda, Giappone, Bali…"
+                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-2xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
                 value={inputs.destination}
-                onChange={e => setInputs(prev => ({ ...prev, destination: e.target.value }))}
+                onChange={(e) => setInputs((p) => ({ ...p, destination: e.target.value }))}
               />
             </div>
           </div>
 
-          {/* People */}
+          {/* Chi viaggia + Budget */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-4">
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-brand-ink/40">
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
                 <Users className="w-3 h-3" /> Chi viaggia?
               </label>
-              <div className="flex items-center gap-6">
-                <div className="flex flex-col">
-                  <span className="text-sm">Adulti</span>
-                  <div className="flex items-center gap-3 mt-2">
-                    <button 
-                      type="button"
-                      onClick={() => setInputs(prev => ({ ...prev, people: { ...prev.people, adults: Math.max(1, prev.people.adults - 1) } }))}
-                      className="p-1 rounded-full border border-brand-ink/20 hover:bg-brand-ink/5"
-                    >
-                      <Minus className="w-4 h-4" />
+              <div className="flex items-center gap-8">
+                <div>
+                  <span className="text-xs text-brand-ink/40 block mb-2">Adulti</span>
+                  <div className="flex items-center gap-3">
+                    <button type="button" onClick={() => setInputs((p) => ({ ...p, people: { ...p.people, adults: Math.max(1, p.people.adults - 1) } }))}
+                      className="w-8 h-8 rounded-full border border-brand-ink/20 flex items-center justify-center hover:bg-brand-ink/5 transition-colors">
+                      <Minus className="w-3 h-3" />
                     </button>
-                    <span className="text-xl font-bold w-4 text-center">{inputs.people.adults}</span>
-                    <button 
-                      type="button"
-                      onClick={() => setInputs(prev => ({ ...prev, people: { ...prev.people, adults: prev.people.adults + 1 } }))}
-                      className="p-1 rounded-full border border-brand-ink/20 hover:bg-brand-ink/5"
-                    >
-                      <Plus className="w-4 h-4" />
+                    <span className="text-2xl font-serif w-6 text-center">{inputs.people.adults}</span>
+                    <button type="button" onClick={() => setInputs((p) => ({ ...p, people: { ...p.people, adults: p.people.adults + 1 } }))}
+                      className="w-8 h-8 rounded-full border border-brand-ink/20 flex items-center justify-center hover:bg-brand-ink/5 transition-colors">
+                      <Plus className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-sm">Bambini</span>
-                  <button 
-                    type="button"
-                    onClick={handleAddChild}
-                    className="mt-2 flex items-center gap-2 text-brand-accent text-sm font-bold"
-                  >
+                <div>
+                  <span className="text-xs text-brand-ink/40 block mb-2">Bambini</span>
+                  <button type="button" onClick={handleAddChild}
+                    className="flex items-center gap-1.5 text-brand-accent text-sm font-bold hover:text-brand-accent/70 transition-colors">
                     <Plus className="w-4 h-4" /> Aggiungi
                   </button>
                 </div>
               </div>
-              
               <AnimatePresence>
                 {inputs.people.children.length > 0 && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="space-y-2 pt-2"
-                  >
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-2">
                     {inputs.people.children.map((child, i) => (
-                      <div key={i} className="flex items-center justify-between bg-brand-ink/5 p-2 rounded-xl">
-                        <span className="text-sm">Età bambino {i + 1}</span>
+                      <div key={i} className="flex items-center justify-between bg-brand-ink/5 p-3 rounded-xl">
+                        <span className="text-sm text-brand-ink/60">Bambino {i + 1}</span>
                         <div className="flex items-center gap-3">
-                          <input 
-                            type="number"
-                            min="0"
-                            max="17"
-                            className="w-12 bg-white rounded-md px-2 py-1 text-sm border border-brand-ink/10"
-                            value={child.age}
-                            onChange={e => handleChildAgeChange(i, parseInt(e.target.value))}
-                          />
-                          <button 
-                            type="button"
-                            onClick={() => handleRemoveChild(i)}
-                            className="text-red-500"
-                          >
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => handleChildAge(i, Math.max(0, child.age - 1))}
+                              className="w-6 h-6 rounded-full bg-white border border-brand-ink/10 flex items-center justify-center">
+                              <Minus className="w-2.5 h-2.5" />
+                            </button>
+                            <span className="text-sm font-bold w-4 text-center">{child.age}</span>
+                            <button type="button" onClick={() => handleChildAge(i, Math.min(17, child.age + 1))}
+                              className="w-6 h-6 rounded-full bg-white border border-brand-ink/10 flex items-center justify-center">
+                              <Plus className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                          <span className="text-xs text-brand-ink/40">anni</span>
+                          <button type="button" onClick={() => handleRemoveChild(i)} className="text-red-400 hover:text-red-600 transition-colors">
                             <Minus className="w-4 h-4" />
                           </button>
                         </div>
@@ -644,120 +868,99 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            {/* Budget */}
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-brand-ink/40">
-                <Euro className="w-3 h-3" /> Budget Totale
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                <Euro className="w-3 h-3" /> Budget totale
               </label>
               <div className="relative">
-                <input 
+                <input
                   required
                   type="number"
-                  className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-2xl focus:border-brand-accent outline-none transition-colors pr-8"
+                  min="100"
+                  className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-2xl focus:border-brand-accent outline-none transition-colors pr-8"
                   value={inputs.budget}
-                  onChange={e => setInputs(prev => ({ ...prev, budget: parseInt(e.target.value) }))}
+                  onChange={(e) => setInputs((p) => ({ ...p, budget: parseInt(e.target.value) || 0 }))}
                 />
-                <span className="absolute right-0 bottom-3 text-xl opacity-40">€</span>
+                <span className="absolute right-0 bottom-3.5 text-xl text-brand-ink/30">€</span>
               </div>
-              <p className="text-[10px] text-brand-ink/40 italic">Include trasporti, alloggi e tour.</p>
+              <p className="text-[10px] text-brand-ink/30 italic">Include voli, alloggi, attività e pasti.</p>
             </div>
           </div>
 
-          {/* Period & Flexible */}
+          {/* Date */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-brand-ink/40">
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
                 <Calendar className="w-3 h-3" /> Quando?
               </label>
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <span className="text-[10px] uppercase text-brand-ink/30 block">Da</span>
-                  <input 
-                    required
-                    type="date"
-                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-lg focus:border-brand-accent outline-none transition-colors"
-                    value={inputs.startDate}
-                    onChange={e => setInputs(prev => ({ ...prev, startDate: e.target.value }))}
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] text-brand-ink/30 uppercase block mb-1">Partenza</span>
+                  <input required type="date" className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-base focus:border-brand-accent outline-none transition-colors"
+                    value={inputs.startDate} onChange={(e) => setInputs((p) => ({ ...p, startDate: e.target.value }))} />
                 </div>
-                <div className="flex-1">
-                  <span className="text-[10px] uppercase text-brand-ink/30 block">A</span>
-                  <input 
-                    required
-                    type="date"
-                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-lg focus:border-brand-accent outline-none transition-colors"
-                    value={inputs.endDate}
-                    onChange={e => setInputs(prev => ({ ...prev, endDate: e.target.value }))}
-                  />
+                <div>
+                  <span className="text-[10px] text-brand-ink/30 uppercase block mb-1">Ritorno</span>
+                  <input required type="date" className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-base focus:border-brand-accent outline-none transition-colors"
+                    value={inputs.endDate} onChange={(e) => setInputs((p) => ({ ...p, endDate: e.target.value }))} />
                 </div>
               </div>
-              <label className="flex items-center gap-3 cursor-pointer group pt-2">
+              <label className="flex items-center gap-3 cursor-pointer group mt-2">
                 <div className="relative">
-                  <input 
-                    type="checkbox"
-                    className="sr-only"
-                    checked={inputs.isPeriodFlexible}
-                    onChange={e => setInputs(prev => ({ ...prev, isPeriodFlexible: e.target.checked }))}
-                  />
-                  <div className={cn(
-                    "w-10 h-5 rounded-full transition-colors",
-                    inputs.isPeriodFlexible ? "bg-brand-accent" : "bg-brand-ink/20"
-                  )} />
-                  <div className={cn(
-                    "absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform",
-                    inputs.isPeriodFlexible && "translate-x-5"
-                  )} />
+                  <input type="checkbox" className="sr-only" checked={inputs.isPeriodFlexible}
+                    onChange={(e) => setInputs((p) => ({ ...p, isPeriodFlexible: e.target.checked }))} />
+                  <div className={cn('w-10 h-5 rounded-full transition-colors duration-300', inputs.isPeriodFlexible ? 'bg-brand-accent' : 'bg-brand-ink/15')} />
+                  <div className={cn('absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow transition-transform duration-300', inputs.isPeriodFlexible && 'translate-x-5')} />
                 </div>
-                <span className="text-sm text-brand-ink/60 group-hover:text-brand-ink transition-colors">Date flessibili</span>
+                <span className="text-sm text-brand-ink/50 group-hover:text-brand-ink transition-colors">Date flessibili (±3 giorni)</span>
               </label>
             </div>
 
-            {/* Accommodation Type */}
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-brand-ink/40">
-                <Home className="w-3 h-3" /> Tipologia Alloggio
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                <Home className="w-3 h-3" /> Tipologia alloggio
               </label>
-              <select 
-                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-xl focus:border-brand-accent outline-none transition-colors appearance-none"
+              <select
+                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
                 value={inputs.accommodationType}
-                onChange={e => setInputs(prev => ({ ...prev, accommodationType: e.target.value }))}
+                onChange={(e) => setInputs((p) => ({ ...p, accommodationType: e.target.value }))}
               >
                 <option>Hotel di charme</option>
-                <option>No Resort / Boutique Hotel</option>
-                <option>B&B Locali</option>
-                <option>Appartamenti / Ville</option>
-                <option>Esperienze Uniche (Glamping, etc)</option>
+                <option>No Resort — Boutique Hotel</option>
+                <option>B&B locali</option>
+                <option>Appartamenti o ville</option>
+                <option>Esperienze uniche (glamping, ryokan…)</option>
               </select>
             </div>
           </div>
 
-          {/* Notes */}
-          <div className="space-y-4">
-            <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-brand-ink/40">
-              <MessageSquare className="w-3 h-3" /> Note & Desideri
+          {/* Note */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+              <MessageSquare className="w-3 h-3" /> Desideri e note
             </label>
-            <textarea 
-              placeholder="Es: Voglio posti non turistici, esperienze uniche, ristoranti locali autentici..."
-              className="w-full bg-brand-ink/5 rounded-2xl p-4 min-h-[120px] focus:ring-2 ring-brand-accent/20 outline-none transition-all"
+            <textarea
+              placeholder="Es: voglio evitare le zone turistiche, preferisco ristoranti dove mangiano i locali, mi piace l'arte contemporanea…"
+              className="w-full bg-brand-ink/5 rounded-2xl p-5 min-h-[120px] text-sm leading-relaxed focus:ring-2 ring-brand-accent/20 outline-none transition-all resize-none placeholder:text-brand-ink/25"
               value={inputs.notes}
-              onChange={e => setInputs(prev => ({ ...prev, notes: e.target.value }))}
+              onChange={(e) => setInputs((p) => ({ ...p, notes: e.target.value }))}
             />
           </div>
 
-          <button 
+          <button
             disabled={loading}
             type="submit"
-            className="w-full bg-brand-accent text-white py-6 rounded-2xl text-xl font-bold flex items-center justify-center gap-3 hover:bg-brand-accent/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/20"
+            className="w-full bg-brand-accent text-white py-5 rounded-2xl text-lg font-bold flex items-center justify-center gap-3 hover:bg-brand-accent/85 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/25 group"
           >
             {loading ? (
               <>
-                <Loader2 className="w-6 h-6 animate-spin" />
-                Sto creando il tuo viaggio...
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Elaborazione in corso…
               </>
             ) : (
               <>
-                Pianifica il mio Viaggio
-                <ArrowRight className="w-6 h-6" />
+                Pianifica il mio viaggio
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </>
             )}
           </button>
@@ -765,4 +968,49 @@ export default function App() {
       </motion.div>
     </div>
   );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
+  const [plan, setPlan] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (inputs: TravelInputs) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await generateTravelPlan(inputs, (step) => setLoadingStep(step));
+      setPlan(result);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error('Error generating plan:', err);
+      setError('Si è verificato un errore durante la generazione del piano. Riprova tra qualche istante.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <LoadingScreen step={loadingStep} />;
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-brand-paper flex items-center justify-center p-6">
+        <div className="max-w-md text-center">
+          <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-2xl mb-3">Qualcosa è andato storto</h2>
+          <p className="text-brand-ink/60 mb-6">{error}</p>
+          <button onClick={() => setError(null)} className="bg-brand-accent text-white px-6 py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-colors">
+            Riprova
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (plan) return <ResultsView plan={plan} onReset={() => setPlan(null)} />;
+
+  return <FormView onSubmit={handleSubmit} loading={loading} />;
 }

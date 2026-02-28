@@ -39,7 +39,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rl = await rateLimit(req);
   if (!rl.ok) return res.status(429).json(ErrorOut("Too many requests. Please try later."));
 
-  const geminiKey = process.env.GEMINI_API_KEY;
+  let geminiKey = process.env.GEMINI_API_KEY || "";
+  // Sanitize key: remove whitespace and quotes
+  geminiKey = geminiKey.trim();
+  if ((geminiKey.startsWith('"') && geminiKey.endsWith('"')) || (geminiKey.startsWith("'") && geminiKey.endsWith("'"))) {
+    geminiKey = geminiKey.slice(1, -1);
+  }
+
   if (!geminiKey) return res.status(500).json(ErrorOut("Server misconfigured: missing GEMINI_API_KEY"));
 
   const parsed = InputContract.safeParse(req.body);
@@ -67,7 +73,7 @@ Return ONLY valid JSON that matches the required contract. No markdown. No extra
   };
 
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${encodeURIComponent(geminiKey)}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
   );
 

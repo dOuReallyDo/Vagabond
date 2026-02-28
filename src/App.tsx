@@ -954,14 +954,16 @@ export default function App() {
 
   const handleSubmit = async (inputs: TravelInputs) => {
     setLoading(true);
+    setLoadingStep('Inizializzazione...');
     setError(null);
     try {
       const result = await generateTravelPlan(inputs, (step) => setLoadingStep(step));
       setPlan(result);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error generating plan:', err);
-      setError('Si è verificato un errore durante la generazione del piano. Riprova tra qualche istante.');
+      // Show the actual error message from the backend
+      setError(err.message || 'Si è verificato un errore durante la generazione del piano. Riprova tra qualche istante.');
     } finally {
       setLoading(false);
     }
@@ -974,7 +976,7 @@ export default function App() {
       <div className="min-h-screen bg-brand-paper flex items-center justify-center p-6">
         <div className="max-w-md text-center">
           <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-2xl mb-3">Qualcosa è andato storto</h2>
+          <h2 className="text-2xl mb-3">Errore</h2>
           <p className="text-brand-ink/60 mb-6">{error}</p>
           <button onClick={() => setError(null)} className="bg-brand-accent text-white px-6 py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-colors">
             Riprova

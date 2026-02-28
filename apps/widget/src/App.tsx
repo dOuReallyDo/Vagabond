@@ -61,80 +61,96 @@ export default function App() {
   }
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: 16, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto" }}>
-      <h2 style={{ fontSize: 22, marginBottom: 8 }}>Proponimi un viaggio</h2>
-      <p style={{ marginTop: 0, opacity: 0.8 }}>
-        Proposte in stile “I Coralli di Beatrice”: mare, autenticità, meteo e budget trasparenti.
-      </p>
-
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
-        <label>
-          Mese
-          <input value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: "100%", padding: 8 }} />
-        </label>
-        <label>
-          Durata (giorni)
-          <input type="number" value={duration} onChange={(e) => setDuration(Number(e.target.value))} style={{ width: "100%", padding: 8 }} />
-        </label>
-        <label>
-          Budget min (€)
-          <input type="number" value={budgetMin} onChange={(e) => setBudgetMin(Number(e.target.value))} style={{ width: "100%", padding: 8 }} />
-        </label>
-        <label>
-          Budget max (€)
-          <input type="number" value={budgetMax} onChange={(e) => setBudgetMax(Number(e.target.value))} style={{ width: "100%", padding: 8 }} />
-        </label>
-
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input type="checkbox" checked={noCar} onChange={() => setNoCar(!noCar)} />
-          Preferisco senza auto
-        </label>
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input type="checkbox" checked={lowCrowd} onChange={() => setLowCrowd(!lowCrowd)} />
-          Poco affollato
-        </label>
+    <div className="vagabond-widget">
+      <div className="vagabond-header">
+        <h2>Proponimi un viaggio</h2>
+        <p>Proposte in stile “I Coralli di Beatrice”: mare, autenticità, meteo e budget trasparenti.</p>
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <button onClick={onGenerate} disabled={status === "loading"} style={{ padding: "10px 14px", cursor: "pointer" }}>
-          {status === "loading" ? "Genero..." : "Genera proposte"}
+      <div className="vagabond-form">
+        <div className="form-row">
+          <div className="form-group">
+            <label>Mese</label>
+            <input type="text" value={month} onChange={(e) => setMonth(e.target.value)} placeholder="Es. Giugno" />
+          </div>
+          <div className="form-group">
+            <label>Durata (giorni)</label>
+            <input type="number" value={duration} onChange={(e) => setDuration(Number(e.target.value))} min={3} max={30} />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label>Budget Min (€)</label>
+            <input type="number" value={budgetMin} onChange={(e) => setBudgetMin(Number(e.target.value))} step={100} />
+          </div>
+          <div className="form-group">
+            <label>Budget Max (€)</label>
+            <input type="number" value={budgetMax} onChange={(e) => setBudgetMax(Number(e.target.value))} step={100} />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="checkbox-group">
+            <input type="checkbox" checked={noCar} onChange={() => setNoCar(!noCar)} />
+            Preferisco senza auto (o uso minimo)
+          </label>
+          <label className="checkbox-group">
+            <input type="checkbox" checked={lowCrowd} onChange={() => setLowCrowd(!lowCrowd)} />
+            Poco affollato (destinazioni minori)
+          </label>
+        </div>
+
+        <button className="primary-btn" onClick={onGenerate} disabled={status === "loading"}>
+          {status === "loading" ? "Sto elaborando le proposte..." : "Genera Proposte"}
         </button>
       </div>
 
       {status === "error" && (
-        <div style={{ marginTop: 12, padding: 12, border: "1px solid #ddd" }}>
+        <div className="error-box">
           <strong>Errore:</strong> {error}
         </div>
       )}
 
       {status === "done" && result && (
-        <div style={{ marginTop: 16 }}>
-          <h3>Proposte</h3>
+        <div className="results-container">
           {result.proposals.map((p) => (
-            <div key={p.proposal_id} style={{ padding: 12, border: "1px solid #ddd", marginBottom: 12 }}>
-              <h4 style={{ marginTop: 0 }}>{p.title}</h4>
-              <ul>
-                {p.why_it_fits.map((w, idx) => <li key={idx}>{w}</li>)}
-              </ul>
+            <div key={p.proposal_id} className="proposal-card">
+              <h3>{p.title}</h3>
+              
+              <div className="proposal-section">
+                <h4>Perché fa per te</h4>
+                <ul>
+                  {p.why_it_fits.map((w, idx) => <li key={idx}>{w}</li>)}
+                </ul>
+              </div>
 
-              <p><strong>Quando:</strong> {p.best_time_to_go.summary}</p>
+              <div className="proposal-section">
+                <h4>Quando andare</h4>
+                <p>{p.best_time_to_go.summary}</p>
+              </div>
 
-              <p><strong>Budget stimato:</strong> €{p.budget_breakdown.total.min} – €{p.budget_breakdown.total.max}</p>
+              <div className="proposal-section">
+                <h4>Budget Stimato</h4>
+                <p>€{p.budget_breakdown.total.min} – €{p.budget_breakdown.total.max}</p>
+              </div>
 
-              <details>
-                <summary>Itinerario giorno per giorno</summary>
-                {p.day_by_day.map((d) => (
-                  <div key={d.day} style={{ marginTop: 8 }}>
-                    <strong>Giorno {d.day} — base: {d.base_location}</strong>
-                    <ul>{d.plan.map((x, i) => <li key={i}>{x}</li>)}</ul>
-                  </div>
-                ))}
-              </details>
+              <div className="proposal-section">
+                <details>
+                  <summary>Itinerario Giorno per Giorno</summary>
+                  {p.day_by_day.map((d) => (
+                    <div key={d.day} className="day-plan">
+                      <strong>Giorno {d.day} — {d.base_location}</strong>
+                      <ul>{d.plan.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                    </div>
+                  ))}
+                </details>
+              </div>
             </div>
           ))}
-          <p style={{ opacity: 0.7, fontSize: 12 }}>
-            Generato il: {result.meta.generated_at}. Assunzioni: meta.assumptions.
-          </p>
+          <div className="meta-info">
+            Generato il: {new Date(result.meta.generated_at).toLocaleString()} • Assunzioni: {result.meta.assumptions.join(", ") || "Standard"}
+          </div>
         </div>
       )}
     </div>

@@ -27,8 +27,9 @@ export default function App() {
   const [noCar, setNoCar] = useState(true);
   const [lowCrowd, setLowCrowd] = useState(true);
   
-  // UX: Simulated progress messages
+  // UX: Simulated progress messages and bar
   const [loadingMsg, setLoadingMsg] = useState("");
+  const [progress, setProgress] = useState(0);
 
   const payload = useMemo(() => {
     const constraints: string[] = [];
@@ -52,9 +53,12 @@ export default function App() {
     };
   }, [startDate, endDate, budgetMin, budgetMax, noCar, lowCrowd]);
 
-  // UX: Cycle through messages while loading
-  useMemo(() => {
-    if (status !== "loading") return;
+  // UX: Progress Logic
+  useEffect(() => {
+    if (status !== "loading") {
+        setProgress(0);
+        return;
+    }
     
     const messages = [
       "Analizzo il periodo e il budget...",
@@ -64,15 +68,25 @@ export default function App() {
       "Finalizzo i dettagli del viaggio..."
     ];
     
-    let i = 0;
     setLoadingMsg(messages[0]);
+    setProgress(5);
+
+    const totalTime = 20000; // 20s estimated duration
+    const intervalTime = 200;
+    const steps = totalTime / intervalTime;
+    const increment = 90 / steps; // Target 95%
+
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        const next = prev + increment;
+        // Update message based on progress chunks
+        const msgIndex = Math.min(Math.floor((next / 100) * messages.length), messages.length - 1);
+        setLoadingMsg(messages[msgIndex]);
+        return next >= 95 ? 95 : next;
+      });
+    }, intervalTime);
     
-    const interval = setInterval(() => {
-      i = (i + 1) % messages.length;
-      setLoadingMsg(messages[i]);
-    }, 3500); 
-    
-    return () => clearInterval(interval);
+    return () => clearInterval(timer);
   }, [status]);
 
   async function onGenerate() {
@@ -95,8 +109,14 @@ export default function App() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error?.message || "Errore server");
-      setResult(j);
-      setStatus("done");
+      
+      // Force progress to 100% before showing result
+      setProgress(100);
+      setTimeout(() => {
+          setResult(j);
+          setStatus("done");
+      }, 500); // Small delay for smooth UI transition
+      
     } catch (e: any) {
       setStatus("error");
       setError(e?.message || "Errore inatteso");
@@ -145,13 +165,39 @@ export default function App() {
         </div>
 
         <button className="primary-btn" onClick={onGenerate} disabled={status === "loading"}>
-          {status === "loading" ? (
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-              <span className="spinner">⏳</span> {loadingMsg}
-            </span>
-          ) : "Genera Proposte"}
+          {status === "loading" ? "Elaborazione in corso..." : "Genera Proposte"}
         </button>
       </div>
+
+      {status === "loading" && (
+        <div style={{ marginTop: "2rem", textAlign: "center" }}>
+            <div style={{ 
+                background: "#f0f0f0", 
+                borderRadius: "8px", 
+                height: "10px", 
+                width: "100%", 
+                overflow: "hidden", 
+                marginBottom: "12px",
+                boxShadow: "inset 0 1px 3px rgba(0,0,0,0.1)"
+            }}>
+                <div style={{ 
+                    background: "var(--color-primary)", 
+                    height: "100%", 
+                    width: `${progress}%`, 
+                    transition: "width 0.2s linear",
+                    borderRadius: "8px"
+                }}></div>
+            </div>
+            <div style={{ 
+                color: "var(--color-primary)", 
+                fontSize: "0.95rem", 
+                fontWeight: "500",
+                minHeight: "1.5em" 
+            }}>
+                {loadingMsg}
+            </div>
+        </div>
+      )}
 
       {status === "error" && (
         <div className="error-box">

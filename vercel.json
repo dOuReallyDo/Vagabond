@@ -1,10 +1,5 @@
 {
   "buildCommand": "npm --workspace apps/widget install && npm --workspace apps/widget run build",
   "outputDirectory": "apps/widget/dist",
-  "functions": {
-    "api/*.ts": {
-      "runtime": "vercel/node@20.x"
-    }
-  },
   "version": 2
 }

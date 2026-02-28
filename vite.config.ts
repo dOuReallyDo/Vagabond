@@ -7,12 +7,28 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
+    // Removed API key injection for security
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+      },
+    },
+    build: {
+      lib: {
+        entry: path.resolve(__dirname, 'src/main.tsx'),
+        name: 'VagabondWidget',
+        fileName: (format) => `vagabond-widget.${format}.js`,
+      },
+      rollupOptions: {
+        // Ensure external dependencies are not bundled into the library
+        // external: ['react', 'react-dom'], // Commented out to bundle React for standalone usage
+        output: {
+          // Provide global variables to use in the UMD build
+          globals: {
+            react: 'React',
+            'react-dom': 'ReactDOM',
+          },
+        },
       },
     },
     server: {

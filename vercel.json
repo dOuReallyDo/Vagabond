@@ -1,7 +1,0 @@
-{
-  "buildCommand": "npm --workspace apps/widget install && npm --workspace apps/widget run build",
-  "outputDirectory": "apps/widget/dist",
-  "functions": {
-    "api/*.ts": { "runtime": "nodejs20.x" }
-  }
-}

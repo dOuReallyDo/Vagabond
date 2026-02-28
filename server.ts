@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import "dotenv/config"; // Load environment variables from .env if present
 import { GoogleGenAI } from "@google/genai";
 import { TravelInputsSchema, TravelPlanSchema } from "./src/shared/contract";
 import { createServer as createViteServer } from "vite";
@@ -17,10 +18,22 @@ app.post("/api/generate", async (req, res) => {
     const inputs = TravelInputsSchema.parse(req.body);
 
     // 2. Initialize Gemini (Server-Side Only)
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not set");
+    let apiKey = process.env.GEMINI_API_KEY || "";
+    
+    // Sanitize key: remove whitespace and quotes
+    apiKey = apiKey.trim();
+    if ((apiKey.startsWith('"') && apiKey.endsWith('"')) || (apiKey.startsWith("'") && apiKey.endsWith("'"))) {
+      apiKey = apiKey.slice(1, -1);
     }
+
+    // Debugging: Log masked key
+    if (!apiKey) {
+      console.error("❌ GEMINI_API_KEY is missing from process.env");
+      throw new Error("GEMINI_API_KEY is not set");
+    } else {
+      console.log(`✅ GEMINI_API_KEY found. Length: ${apiKey.length}, First 4: ${apiKey.substring(0, 4)}`);
+    }
+
     const ai = new GoogleGenAI({ apiKey });
 
     // 3. Construct Prompt
@@ -179,7 +192,7 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
 `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: prompt + "\n\nRicorda: SOLO JSON valido, nessun testo extra, nessun blocco markdown.",
       config: {
         temperature: 0.3,

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vagabond Widget Demo</title>
+  </head>
+  <body>
+    <!-- This simulates the WordPress page structure -->
+    <div style="max-width: 900px; margin: 0 auto; padding: 20px;">
+      <h1>I Coralli di Beatrice</h1>
+      <p>Benvenuti nel nostro travel planner.</p>
+      
+      <!-- The Widget Container -->
+      <div id="vagabond-widget-root"></div>
+      
+    </div>
+
+    <!-- The Script -->
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <script>
+      // Simulate the WordPress shortcode execution
+      // In production, this script would be loaded after the bundle
+      window.addEventListener('load', () => {
+        // Wait for module to load if in dev
+        setTimeout(() => {
+            if (window.mountVagabondWidget) {
+            window.mountVagabondWidget('vagabond-widget-root');
+            }
+        }, 500);
+      });
+    </script>
+  </body>
+</html>

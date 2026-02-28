@@ -1,30 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { InputContract, OutputContract } from "../src/shared/contract";
 
-async function rateLimit(req: VercelRequest) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return { ok: true };
-
-  const ip = (req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || "unknown").trim();
-  const key = `rl:${ip}:${Math.floor(Date.now() / (10 * 60 * 1000))}`;
-
-  const incr = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  }).catch(() => null);
-
-  if (!incr || !incr.ok) return { ok: true };
-
-  const count = Number(await incr.text());
-  if (count === 1) {
-    fetch(`${url}/expire/${encodeURIComponent(key)}/600`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch(() => {});
-  }
-  if (count > 20) return { ok: false };
-  return { ok: true };
-}
-
 const ErrorOut = (message: string, details?: unknown) => ({
   meta: { generated_at: new Date().toISOString(), currency: "EUR", assumptions: [], disclaimer: "" },
   user_profile: {},
@@ -36,8 +12,7 @@ const ErrorOut = (message: string, details?: unknown) => ({
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
-  const rl = await rateLimit(req);
-  if (!rl.ok) return res.status(429).json(ErrorOut("Too many requests. Please try later."));
+  // Rate limiting removed for staging/testing as requested.
 
   let geminiKey = process.env.GEMINI_API_KEY || "";
   // Sanitize key: remove whitespace and quotes
@@ -52,10 +27,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!parsed.success) return res.status(400).json(ErrorOut("Invalid input", parsed.error.flatten()));
 
   const system = `
-You are a Travel Designer in the style of "I Coralli di Beatrice":
-- pragmatic, method-driven, evidence-backed, low-crowd sea/islands, avoid generic resorts
-- costs always ranges with assumptions
-- if evidence not found, mark uncertainty
+You are a Travel Designer in the style of "I Coralli di Beatrice".
+Style: Pragmatic, method-driven, evidence-backed, low-crowd sea/islands, avoid generic resorts.
+
+CRITICAL RULES:
+1. **IMAGES**: Use `https://loremflickr.com/800/600/KEYWORD1,KEYWORD2?lock=UNIQUE_NUMBER`. 
+   - KEYWORDS must be specific (e.g., "cala+goloritze,sardinia", "ferry,naples"). 
+   - NEVER use generic keywords like "sea" or "travel". 
+   - Ensure every image has a different lock number.
+2. **LINKS**: 
+   - For Flights/Hotels: Provide a SEARCH URL (Google Flights, Booking.com, Skyscanner) pre-filled with the destination/dates if possible. 
+   - Example: "https://www.google.com/travel/flights?q=Flights+to+Olbia".
+   - Do not invent specific prices for specific links unless verified. Use ranges.
+3. **CONTENT**:
+   - Costs always ranges with assumptions.
+   - If evidence not found, mark uncertainty.
+
 Return ONLY valid JSON that matches the required contract. No markdown. No extra text.
 `;
 

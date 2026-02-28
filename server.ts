@@ -57,8 +57,15 @@ VIAGGIO:
 - Note: ${inputs.notes || "nessuna"}
 
 REGOLE ASSOLUTE:
-1. IMMAGINI: NON USARE source.unsplash.com (è dismesso). Usa ESCLUSIVAMENTE: "https://loremflickr.com/800/600/[keyword-in-inglese]?lock=[numero-casuale]" (es. https://loremflickr.com/800/600/colosseum?lock=42).
-2. LINK: Usa SOLO URL affidabili: wikipedia.org, tripadvisor.com, booking.com. MAI inventare URL. Se non sei certo, usa: https://www.google.com/search?q=[nome+luogo+urlencoded]
+1. IMMAGINI: NON USARE source.unsplash.com (è dismesso). Usa ESCLUSIVAMENTE: "https://loremflickr.com/800/600/[keyword-in-inglese]?lock=[numero-casuale]".
+   - KEYWORDS devono essere SPECIFICHE per il luogo/attività (es. "colosseum,rome", "carbonara,pasta", "amalfi+coast").
+   - MAI usare keyword generiche come "travel" o "sea" da sole.
+   - Ogni immagine deve avere un lock number diverso.
+2. LINK: 
+   - Usa SOLO URL affidabili: wikipedia.org, tripadvisor.com, booking.com.
+   - Per VOLI e HOTEL: Fornisci URL di RICERCA (Google Flights, Booking search) pre-compilati con la destinazione.
+   - Esempio: "https://www.google.com/travel/flights?q=Flights+to+Olbia".
+   - Non inventare prezzi specifici per link specifici se non verificati.
 3. COORDINATE: Ogni luogo DEVE avere lat/lng precise (almeno 4 decimali).
 4. COSTI: Realistici. Totale non superiore a €${inputs.budget}.
 5. HOTEL REALI: Solo strutture che esistono davvero con nomi precisi.
@@ -73,7 +80,7 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
     "title": "Nome Destinazione",
     "tagline": "Frase ispirazionale breve",
     "description": "Descrizione evocativa 2-3 frasi",
-    "heroImageUrl": "URL immagine panoramica da Unsplash o Wikimedia",
+    "heroImageUrl": "URL immagine panoramica specifica",
     "attractions": [
       {
         "name": "Nome Attrazione",
@@ -134,13 +141,13 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
   },
   "flights": [
     {
-      "airline": "Nome compagnia aerea reale",
+      "airline": "Compagnia consigliata",
       "route": "MXP -> JFK",
       "estimatedPrice": 450,
       "departureTime": "10:30",
       "duration": "9h 30m",
-      "bookingUrl": "https://www.expedia.it/Flights-Search",
-      "options": ["Opzione tariffaria 1", "Opzione tariffaria 2"]
+      "bookingUrl": "https://www.google.com/travel/flights?q=...",
+      "options": ["Opzione 1", "Opzione 2"]
     }
   ],
   "accommodations": [

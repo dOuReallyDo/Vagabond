@@ -45,14 +45,13 @@ VIAGGIO:
 - Note: ${inputs.notes || "nessuna"}
 
 REGOLE ASSOLUTE:
-1. IMMAGINI: NON USARE source.unsplash.com (è dismesso). Usa ESCLUSIVAMENTE: "https://loremflickr.com/800/600/[keyword-in-inglese]?lock=[numero-casuale]" (es. https://loremflickr.com/800/600/colosseum?lock=42).
-2. LINK: Usa SOLO URL affidabili: wikipedia.org, tripadvisor.com, booking.com. MAI inventare URL. Se non sei certo, usa: https://www.google.com/search?q=[nome+luogo+urlencoded]
-3. COORDINATE: Ogni luogo DEVE avere lat/lng precise (almeno 4 decimali).
+1. IMMAGINI: Per ogni elemento fornisci un URL immagine da Unsplash (formato: https://source.unsplash.com/featured/800x600/?keyword-specifico-in-inglese) oppure Wikimedia Commons (https://upload.wikimedia.org/...). NON usare Google Images, Flickr, Instagram, Pinterest, loremflickr, picsum.
+2. LINK: Usa SOLO URL affidabili: wikipedia.org, tripadvisor.com, booking.com, expedia.com, viator.com. Per hotel usa booking.com. MAI inventare URL. Se non sei certo, usa: https://www.google.com/search?q=[nome+luogo+urlencoded]
+3. COORDINATE: Ogni luogo DEVE avere lat/lng precise (almeno 4 decimali). Coordinate REALI, non inventate.
 4. COSTI: Realistici. Totale non superiore a €${inputs.budget}.
 5. HOTEL REALI: Solo strutture che esistono davvero con nomi precisi.
 6. ITALIANO CORRETTO: Grammatica italiana perfetta, maiuscole corrette, nessun refuso.
 7. RISTORANTI REALI: Solo ristoranti verificabili con indirizzi reali.
-8. VELOCITÀ: Sii conciso nelle descrizioni per ridurre i tempi di generazione.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
@@ -179,7 +178,11 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
 }
 `;
 
-  onProgress?.("Costruisco l'itinerario personalizzato...");
+  onProgress?.("Cerco attrazioni e punti di interesse...", inputs.destination);
+  await new Promise((r) => setTimeout(r, 500));
+  onProgress?.("Verifico hotel e prezzi...");
+  await new Promise((r) => setTimeout(r, 500));
+  onProgress?.("Costruisco l'itinerario giorno per giorno...");
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -187,13 +190,21 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
       prompt +
       "\n\nRicorda: SOLO JSON valido, nessun testo extra, nessun blocco markdown.",
     config: {
+      tools: [{ googleSearch: {} }],
       temperature: 0.3,
-      responseMimeType: "application/json",
     },
   });
 
-  onProgress?.("Finalizzo i dettagli del viaggio...");
+  onProgress?.("Verifico link e immagini...");
+  await new Promise((r) => setTimeout(r, 400));
+  onProgress?.("Preparo la mappa interattiva...");
+  await new Promise((r) => setTimeout(r, 300));
+  onProgress?.("Il tuo viaggio è quasi pronto...");
+  await new Promise((r) => setTimeout(r, 200));
 
   const text = response.text || "";
-  return JSON.parse(text);
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const jsonStr = jsonMatch ? jsonMatch[0] : text;
+
+  return JSON.parse(jsonStr);
 };

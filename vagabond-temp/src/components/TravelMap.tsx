@@ -33,8 +33,6 @@ export const TravelMap: React.FC<TravelMapProps> = ({ points, destination }) => 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
-    let isCancelled = false;
-
     // Filtra punti con coordinate valide
     const validPoints = points.filter(
       (p) => p.lat !== 0 && p.lng !== 0 && !isNaN(p.lat) && !isNaN(p.lng)
@@ -44,8 +42,6 @@ export const TravelMap: React.FC<TravelMapProps> = ({ points, destination }) => 
 
     // Importa Leaflet dinamicamente per evitare SSR issues
     import('leaflet').then((L) => {
-      if (isCancelled || mapInstance.current) return;
-
       // Fix icone Leaflet con Vite
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
@@ -54,29 +50,24 @@ export const TravelMap: React.FC<TravelMapProps> = ({ points, destination }) => 
         shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       });
 
-      // Verifica se il container ha già una mappa (Leaflet aggiunge una classe o proprietà)
-      // @ts-ignore
-      if (mapRef.current?._leaflet_id) return;
+      const center: [number, number] = [
+        validPoints.reduce((s, p) => s + p.lat, 0) / validPoints.length,
+        validPoints.reduce((s, p) => s + p.lng, 0) / validPoints.length,
+      ];
 
-      try {
-        const center: [number, number] = [
-          validPoints.reduce((s, p) => s + p.lat, 0) / validPoints.length,
-          validPoints.reduce((s, p) => s + p.lng, 0) / validPoints.length,
-        ];
+      const map = L.map(mapRef.current!, {
+        center,
+        zoom: 13,
+        zoomControl: true,
+        scrollWheelZoom: true,
+      });
 
-        const map = L.map(mapRef.current!, {
-          center,
-          zoom: 13,
-          zoomControl: true,
-          scrollWheelZoom: true,
-        });
+      mapInstance.current = map;
 
-        mapInstance.current = map;
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxZoom: 19,
-        }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
 
       // Colori per tipo
       const markers: any[] = [];
@@ -142,19 +133,15 @@ export const TravelMap: React.FC<TravelMapProps> = ({ points, destination }) => 
         const group = L.featureGroup(markers);
         map.fitBounds(group.getBounds().pad(0.15));
       }
-      } catch (e) {
-        console.error('Error initializing map:', e);
-      }
     });
 
     return () => {
-      isCancelled = true;
       if (mapInstance.current) {
         mapInstance.current.remove();
         mapInstance.current = null;
       }
     };
-  }, [points, destination]);
+  }, []);
 
   return (
     <div className="relative">

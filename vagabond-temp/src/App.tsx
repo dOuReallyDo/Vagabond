@@ -21,31 +21,24 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Immagine da screenshot (thum.io) o fallback dinamico (loremflickr)
+// Immagine da Unsplash con keyword pertinente — niente AI generativa
 const getImageUrl = (item: any, keyword: string) => {
-  // Se l'IA ha fornito un URL immagine che sembra valido, proviamo a usarlo
   if (item?.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http')) {
     const url = item.imageUrl.trim();
-    const bad = ['source.unsplash.com', 'picsum', 'google.com/imgres', 'gstatic', 'instagram', 'pinterest', 'flickr.com/photos'];
+    // Escludi fonti problematiche
+    const bad = ['loremflickr', 'picsum', 'google.com/imgres', 'gstatic', 'instagram', 'pinterest', 'flickr.com/photos'];
     if (!bad.some((b) => url.includes(b))) return url;
   }
-
-  // Se c'è un sourceUrl o bookingUrl, potremmo usare thum.io, 
-  // ma loremflickr è più veloce e visivamente più gradevole per i viaggi
+  // Fallback: Unsplash con keyword specifica
   const kw = encodeURIComponent(keyword.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().slice(0, 60));
-  
-  // Usiamo un seed basato sul nome per avere immagini consistenti ma diverse tra loro
-  const seed = Math.abs(keyword.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % 1000;
-  
-  return `https://loremflickr.com/800/600/${kw},travel/all?lock=${seed}`;
+  return `https://source.unsplash.com/featured/800x600/?${kw}`;
 };
 
 const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   const target = e.target as HTMLImageElement;
   if (!target.dataset.fallback) {
     target.dataset.fallback = '1';
-    const seed = Math.floor(Math.random() * 1000);
-    target.src = `https://loremflickr.com/800/600/travel,landscape/all?lock=${seed}`;
+    target.src = 'https://source.unsplash.com/featured/800x600/?travel,landscape';
   }
 };
 
@@ -58,9 +51,30 @@ const getSafeLink = (url: string | undefined, name: string): string => {
   return `https://www.google.com/search?q=${encodeURIComponent(name)}`;
 };
 
+const LOADING_STEPS = [
+  { icon: '🗺️', text: 'Analizzo la destinazione...', detail: 'Studio clima, attrazioni e stagionalità' },
+  { icon: '🏨', text: 'Cerco gli alloggi migliori...', detail: 'Filtro strutture per budget e preferenze' },
+  { icon: '✈️', text: 'Verifico le opzioni di volo...', detail: 'Confronto compagnie aeree e prezzi' },
+  { icon: '📍', text: 'Costruisco l\'itinerario...', detail: 'Ottimizzazione percorsi e tempistiche' },
+  { icon: '🍽️', text: 'Seleziono ristoranti locali...', detail: 'Solo locali autentici e verificati' },
+  { icon: '🗾', text: 'Preparo la mappa interattiva...', detail: 'Posiziono tutti i punti di interesse' },
+  { icon: '✅', text: 'Verifico link e immagini...', detail: 'Controllo qualità delle informazioni' },
+];
+
 // ─── LOADING SCREEN ─────────────────────────────────────────────────────────
 
 function LoadingScreen({ step }: { step: string }) {
+  const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStepIndex((i) => Math.min(i + 1, LOADING_STEPS.length - 1));
+    }, 2200);
+    return () => clearInterval(interval);
+  }, []);
+
+  const current = LOADING_STEPS[stepIndex];
+
   return (
     <div className="min-h-screen bg-brand-paper flex flex-col items-center justify-center p-6">
       <motion.div
@@ -73,38 +87,50 @@ function LoadingScreen({ step }: { step: string }) {
           <div className="absolute inset-0 rounded-full border-4 border-brand-accent/20 animate-pulse" />
           <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-accent animate-spin" />
           <div className="absolute inset-0 flex items-center justify-center text-5xl">
-            🌍
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={stepIndex}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                {current.icon}
+              </motion.span>
+            </AnimatePresence>
           </div>
         </div>
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={step}
+            key={stepIndex}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.35 }}
           >
-            <h2 className="text-2xl mb-2">{step || 'Pianifico il tuo viaggio...'}</h2>
-            <p className="text-brand-ink/50 text-sm font-sans italic">Vagabond AI sta cercando le migliori opzioni per te</p>
+            <h2 className="text-2xl mb-2">{current.text}</h2>
+            <p className="text-brand-ink/50 text-sm font-sans">{current.detail}</p>
           </motion.div>
         </AnimatePresence>
 
-        <div className="mt-12 flex justify-center gap-2">
-          {[0, 1, 2].map((i) => (
-            <motion.div
-              key={i}
-              animate={{
-                scale: [1, 1.5, 1],
-                opacity: [0.3, 1, 0.3],
-              }}
-              transition={{
-                duration: 1,
-                repeat: Infinity,
-                delay: i * 0.2,
-              }}
-              className="w-2 h-2 bg-brand-accent rounded-full"
-            />
+        {/* Progress bar */}
+        <div className="mt-10 space-y-3">
+          {LOADING_STEPS.map((s, i) => (
+            <div key={i} className="flex items-center gap-3 text-left">
+              <div className={cn(
+                'w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all duration-500',
+                i < stepIndex ? 'bg-brand-accent' : i === stepIndex ? 'bg-brand-accent/40 animate-pulse' : 'bg-brand-ink/10'
+              )}>
+                {i < stepIndex && <CheckCircle2 className="w-3 h-3 text-white" />}
+              </div>
+              <span className={cn(
+                'text-xs transition-all duration-300',
+                i === stepIndex ? 'text-brand-ink font-medium' : i < stepIndex ? 'text-brand-ink/40 line-through' : 'text-brand-ink/20'
+              )}>
+                {s.text}
+              </span>
+            </div>
           ))}
         </div>
       </motion.div>
@@ -132,14 +158,14 @@ function StarRating({ value }: { value: number }) {
 // ─── CARD IMMAGINE CON LINK VERIFICATO ───────────────────────────────────────
 
 interface ImageCardProps {
-  item: any;
+  imageUrl?: string;
   imageKeyword: string;
   href: string;
   children: React.ReactNode;
   className?: string;
 }
 
-function ImageCard({ item, imageKeyword, href, children, className }: ImageCardProps) {
+function ImageCard({ imageUrl, imageKeyword, href, children, className }: ImageCardProps) {
   return (
     <a
       href={href}
@@ -149,7 +175,7 @@ function ImageCard({ item, imageKeyword, href, children, className }: ImageCardP
     >
       <div className="h-52 overflow-hidden relative">
         <img
-          src={getImageUrl(item, imageKeyword)}
+          src={getImageUrl({ imageUrl }, imageKeyword)}
           alt={imageKeyword}
           onError={handleImageError}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
@@ -445,7 +471,7 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
                       {(act.imageUrl || act.name) && (
                         <div className="h-44 overflow-hidden">
                           <img
-                            src={getImageUrl(act, (act.name || act.description || 'travel') + ' ' + (plan.destinationOverview?.title || ''))}
+                            src={getImageUrl({ imageUrl: act.imageUrl }, (act.name || act.description || 'travel') + ' ' + (plan.destinationOverview?.title || ''))}
                             alt={act.name || act.description}
                             onError={handleImageError}
                             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
@@ -560,7 +586,7 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
                   {(stop.options || []).map((hotel: any, j: number) => (
                     <ImageCard
                       key={j}
-                      item={hotel}
+                      imageUrl={hotel.imageUrl}
                       imageKeyword={hotel.name + ' hotel room interior'}
                       href={getSafeLink(hotel.bookingUrl, hotel.name + ' hotel')}
                     >
@@ -618,7 +644,7 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
               {plan.bestRestaurants.map((rest: any, i: number) => (
                 <ImageCard
                   key={i}
-                  item={rest}
+                  imageUrl={rest.imageUrl}
                   imageKeyword={rest.name + ' food restaurant ' + rest.cuisineType}
                   href={getSafeLink(rest.sourceUrl, rest.name + ' ristorante')}
                 >

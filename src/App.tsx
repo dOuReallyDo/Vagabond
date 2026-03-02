@@ -11,52 +11,10 @@ import {
   CheckCircle2, AlertTriangle, ChevronRight, ExternalLink, Utensils,
   Clock, Lightbulb, Smartphone, Train, Download, Search
 } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { generateTravelPlan, summarizeAccommodationReviews, type TravelInputs } from './services/travelService';
 import { TravelMap } from './components/TravelMap';
+import { cn, getImageUrl, handleImageError, getSafeLink } from './utils/travelUi';
 import 'leaflet/dist/leaflet.css';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-// Immagine da screenshot (thum.io) o fallback dinamico (loremflickr)
-const getImageUrl = (item: any, keyword: string) => {
-  // Se l'IA ha fornito un URL immagine che sembra valido, proviamo a usarlo
-  if (item?.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http')) {
-    const url = item.imageUrl.trim();
-    const bad = ['source.unsplash.com', 'picsum', 'google.com/imgres', 'gstatic', 'instagram', 'pinterest', 'flickr.com/photos'];
-    if (!bad.some((b) => url.includes(b))) return url;
-  }
-
-  // Se c'è un sourceUrl o bookingUrl, potremmo usare thum.io, 
-  // ma loremflickr è più veloce e visivamente più gradevole per i viaggi
-  const kw = encodeURIComponent(keyword.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().slice(0, 60));
-  
-  // Usiamo un seed basato sul nome per avere immagini consistenti ma diverse tra loro
-  const seed = Math.abs(keyword.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % 1000;
-  
-  return `https://loremflickr.com/800/600/${kw},travel/all?lock=${seed}`;
-};
-
-const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-  const target = e.target as HTMLImageElement;
-  if (!target.dataset.fallback) {
-    target.dataset.fallback = '1';
-    const seed = Math.floor(Math.random() * 1000);
-    target.src = `https://loremflickr.com/800/600/travel,landscape/all?lock=${seed}`;
-  }
-};
-
-// Link sicuri: fallback a Google Search, mai 404
-const getSafeLink = (url: string | undefined, name: string): string => {
-  if (url && typeof url === 'string' && url.startsWith('http')) {
-    const trusted = ['wikipedia.org', 'tripadvisor', 'booking.com', 'expedia', 'viator', 'lonelyplanet', 'google.com', 'wikimedia'];
-    if (trusted.some((t) => url.includes(t))) return url;
-  }
-  return `https://www.google.com/search?q=${encodeURIComponent(name)}`;
-};
 
 // ─── LOADING SCREEN ─────────────────────────────────────────────────────────
 

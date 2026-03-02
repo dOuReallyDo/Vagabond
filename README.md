@@ -1,30 +1,34 @@
-# Vagabond AI - v0.1
+# Vagabond AI - v0.2
 
-Vagabond AI è un assistente di viaggio intelligente che trasforma i desideri degli utenti in itinerari completi, visivi e pronti all'uso. Utilizzando modelli linguistici avanzati (Gemini 2.5 Flash), l'app ricerca attivamente voli, alloggi, ristoranti e attività stagionali, fornendo link reali e mappe interattive.
+Vagabond AI è un assistente di viaggio intelligente che trasforma i desideri degli utenti in itinerari completi, visivi e pronti all'uso.
 
 ## 🚀 Visione
-L'obiettivo di Vagabond AI è eliminare lo stress della pianificazione, offrendo un'esperienza di "slow travel" autentica e personalizzata, con un occhio di riguardo al budget e alla stagionalità.
+Eliminare lo stress della pianificazione con un'esperienza di "slow travel" autentica, trasparente sul budget e attenta alla stagionalità.
 
 ## ✨ Caratteristiche Principali
-- **Itinerari Dinamici**: Generazione di piani giornalieri dettagliati.
-*   **Mappe Interattive**: Integrazione con Google Maps per visualizzare il percorso.
-*   **Ricerca Real-Time**: Utilizzo di Google Search per trovare link a tour operator e hotel reali.
-*   **Visual Experience**: Immagini dinamiche e pertinenti per ogni tappa del viaggio.
-*   **Budget Intelligence**: Valutazione automatica della fattibilità economica del viaggio.
-*   **Seasonal Awareness**: Suggerimenti basati sul periodo specifico (es. avvistamento balene a Boa Vista).
+- Itinerari dinamici con validazione schema runtime.
+- Proxy server-side per Gemini (chiavi API mai esposte al browser).
+- Ricerca grounding via Google Search per aumentare affidabilità dei contenuti.
+- Mappe interattive e punti geolocalizzati.
+- Analisi recensioni alloggi con endpoint dedicato.
+- Fallback immagini/link per resilienza UI.
 
 ## 🛠️ Tech Stack
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
-- **Animazioni**: Framer Motion
-- **Icone**: Lucide React
-- **AI**: Google Gemini API (@google/genai)
-- **Maps**: Google Maps Embed API
+- Frontend: React 18 + TypeScript + Tailwind CSS
+- Backend: Express + TypeScript (middleware Vite in dev)
+- AI: Google Gemini (`gemini-3-flash-preview`) via `@google/genai`
+- Contratti: Zod per validazione input/output
 
 ## 📦 Struttura del Progetto
-- `/src/components`: Componenti UI riutilizzabili.
-- `/src/services`: Logica di integrazione con le API AI.
-- `/src/App.tsx`: Layout principale e gestione dello stato.
-- `/src/index.css`: Configurazioni Tailwind e stili globali.
+- `/src/components`: componenti UI.
+- `/src/services`: client API frontend.
+- `/src/shared/contract.ts`: schema dati input/output.
+- `/src/utils`: utility UI estratte da `App.tsx`.
+- `/server.ts`: API server-side (`/api/generate`, `/api/reviews`) con rate limiting e logging.
 
----
-*Sviluppato con ❤️ per i viaggiatori moderni.*
+## 🧪 Comandi utili
+```bash
+npm run dev
+npm run build
+npm run lint
+```

@@ -1,15 +1,17 @@
 # Security Notes
 
-## Current npm audit status
-`npm audit` reports vulnerabilities in transitive dependencies pulled by `@vercel/node`.
-A full fix requires `npm audit fix --force` which upgrades `@vercel/node` to a breaking major version.
+## Stato attuale
+- Le chiavi API Gemini restano lato server.
+- Il frontend comunica solo con API interne (`/api/generate`, `/api/reviews`).
+- È attivo rate limiting in-memory per IP.
+- Input/output AI sono validati con schema Zod.
 
-## MVP decision
-- Do NOT apply `npm audit fix --force` yet.
-- Re-evaluate during hardening phase after staging deploy.
+## Rischi residui
+- Rate limiting in-memory non è distribuito (non adatto a multi-instance).
+- Manca ancora autenticazione/abuse prevention avanzata.
 
-## Mitigations
-- Minimal API surface: only POST /api/generate
-- Strict input validation and strict output schema validation
-- Optional rate limiting (Upstash)
-- Run on Node 20 LTS in deployment
+## Miglioramenti consigliati (fase successiva)
+- Passare a rate limiting distribuito (Redis/Upstash).
+- Aggiungere audit log persistente + alerting.
+- Aggiungere policy CSP e hardening headers.
+- Test di sicurezza automatici in CI.

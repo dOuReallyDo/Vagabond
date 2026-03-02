@@ -2,75 +2,163 @@ import { z } from "zod";
 
 // --- Input Schema ---
 
-export const InputContract = z.object({
-  travel_dates: z.object({
-    from: z.string().nullable(),
-    to: z.string().nullable(),
-    month: z.string().nullable(),
+export const TravelInputsSchema = z.object({
+  people: z.object({
+    adults: z.number().min(1),
+    children: z.array(z.object({ age: z.number() })),
   }),
-  duration_days: z.number().min(1),
-  budget_total: z.object({
-    min: z.number(),
-    max: z.number(),
-  }),
-  departure_airports: z.array(z.string()),
-  pace: z.string(),
-  priorities: z.array(z.string()),
-  constraints: z.array(z.string()),
+  budget: z.number().min(100),
+  departureCity: z.string().min(2),
+  destination: z.string().min(2),
+  startDate: z.string(),
+  endDate: z.string(),
+  isPeriodFlexible: z.boolean(),
+  accommodationType: z.string(),
+  stopover: z.string().optional(),
+  departureTimePreference: z.string().optional(),
+  notes: z.string().optional(),
+  modificationRequest: z.string().optional(),
+  previousPlan: z.any().optional(),
 });
 
-export type InputContractType = z.infer<typeof InputContract>;
+export type TravelInputs = z.infer<typeof TravelInputsSchema>;
 
-// --- Output Schema ---
+// --- Output Schema (Travel Plan) ---
 
-export const OutputContract = z.object({
-  meta: z.object({
-    generated_at: z.string(),
-    currency: z.string(),
-    assumptions: z.array(z.string()),
-    disclaimer: z.string(),
+export const TravelPlanSchema = z.object({
+  budgetWarning: z.string().nullable(),
+  destinationOverview: z.object({
+    title: z.string(),
+    description: z.string(),
+    attractions: z.array(
+      z.object({
+        name: z.string(),
+        description: z.string(),
+        sourceUrl: z.string().optional(),
+        category: z.string().optional(),
+        estimatedVisitTime: z.string().optional(),
+        lat: z.number().optional(),
+        lng: z.number().optional(),
+      })
+    ),
+    heroImageUrl: z.string().optional(),
+    tagline: z.string().optional(),
   }),
-  user_profile: z.record(z.unknown()), // Flexible for now
-  proposals: z.array(
+  weatherInfo: z.object({
+    summary: z.string(),
+    pros: z.string(),
+    cons: z.string(),
+    averageTemp: z.string().optional(),
+    packingTips: z.string().optional(),
+  }),
+  safetyAndHealth: z.object({
+    safetyWarnings: z.string(),
+    vaccinationsRequired: z.string(),
+    safetyLevel: z.string().optional(),
+    emergencyNumbers: z.string().optional(),
+  }),
+  itinerary: z.array(
     z.object({
-      proposal_id: z.string(),
+      day: z.number(),
       title: z.string(),
-      why_it_fits: z.array(z.string()),
-      best_time_to_go: z.object({
-        summary: z.string(),
-      }),
-      budget_breakdown: z.object({
-        total: z.object({ min: z.number(), max: z.number() }),
-        flights: z.object({ min: z.number(), max: z.number() }),
-        accommodation: z.object({ min: z.number(), max: z.number() }),
-      }),
-      day_by_day: z.array(
+      theme: z.string().optional(),
+      activities: z.array(
         z.object({
-          day: z.number(),
-          base_location: z.string(),
-          plan: z.array(z.string()),
+          time: z.string(),
+          name: z.string().optional(),
+          description: z.string(),
+          costEstimate: z.number().optional(),
+          sourceUrl: z.string().optional(),
+          imageUrl: z.string().optional(),
+          lat: z.number().optional(),
+          lng: z.number().optional(),
+          duration: z.string().optional(),
+          transport: z.string().optional(),
+          travelTime: z.string().optional(),
+          tips: z.string().optional(),
         })
       ),
     })
   ),
-  followups: z.array(
+  budgetBreakdown: z.object({
+    flights: z.number(),
+    accommodation: z.number(),
+    activities: z.number(),
+    food: z.number(),
+    totalEstimated: z.number(),
+    transport: z.number().optional(),
+    misc: z.number().optional(),
+    perPersonPerDay: z.number().optional(),
+  }),
+  flights: z.array(
     z.object({
-      question: z.string(),
-      reason: z.string(),
-      field_to_refine: z.string(),
+      airline: z.string(),
+      route: z.string(),
+      estimatedPrice: z.number(),
+      options: z.array(z.string()).optional(),
+      departureTime: z.string().optional(),
+      duration: z.string().optional(),
+      bookingUrl: z.string().optional(),
     })
   ).optional(),
-  error: z.object({
-    message: z.string(),
-    details: z.unknown().optional(),
+  accommodations: z.array(
+    z.object({
+      stopName: z.string(),
+      options: z.array(
+        z.object({
+          name: z.string(),
+          type: z.string(),
+          rating: z.number().optional(),
+          reviewSummary: z.string(),
+          estimatedPricePerNight: z.number(),
+          bookingUrl: z.string().optional(),
+          imageUrl: z.string().optional(),
+          lat: z.number().optional(),
+          lng: z.number().optional(),
+          address: z.string().optional(),
+          amenities: z.array(z.string()).optional(),
+          stars: z.number().optional(),
+        })
+      ),
+    })
+  ).optional(),
+  bestRestaurants: z.array(
+    z.object({
+      name: z.string(),
+      cuisineType: z.string(),
+      rating: z.number().optional(),
+      reviewSummary: z.string(),
+      sourceUrl: z.string().optional(),
+      priceRange: z.string(),
+      imageUrl: z.string().optional(),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
+      address: z.string().optional(),
+      mustTry: z.string().optional(),
+    })
+  ).optional(),
+  mapPoints: z.array(
+    z.object({
+      lat: z.number(),
+      lng: z.number(),
+      label: z.string(),
+      type: z.string().optional(),
+    })
+  ).optional(),
+  localTips: z.array(z.string()).optional(),
+  transportInfo: z.object({
+    localTransport: z.string().optional(),
+    bestApps: z.array(z.string()).optional(),
+    estimatedLocalCost: z.string().optional(),
   }).optional(),
+  travelBlogs: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string(),
+      description: z.string().optional(),
+    })
+  ).optional(),
 });
 
-export type OutputContractType = z.infer<typeof OutputContract>;
-
-// Legacy exports to prevent breaking other files if any
-export const TravelInputsSchema = InputContract;
-export const TravelPlanSchema = OutputContract;
-export type TravelInputs = InputContractType;
-export type TravelPlan = OutputContractType;
+export type TravelPlan = z.infer<typeof TravelPlanSchema>;
 

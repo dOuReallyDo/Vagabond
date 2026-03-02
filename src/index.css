@@ -23,3 +23,49 @@
 .glass {
   @apply bg-white/70 backdrop-blur-md border border-white/20;
 }
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .glass {
+    background: white !important;
+    border: 1px solid #eee !important;
+    box-shadow: none !important;
+  }
+  section {
+    page-break-inside: avoid;
+    margin-bottom: 2rem !important;
+  }
+  h1, h2, h3 {
+    page-break-after: avoid;
+    color: black !important;
+  }
+  p, span, div {
+    color: black !important;
+  }
+  .bg-brand-ink\/5, .bg-brand-ink\/10 {
+    background-color: #f3f4f6 !important;
+  }
+  .text-white {
+    color: black !important;
+  }
+  .text-white\/70, .text-white\/85 {
+    color: #4b5563 !important;
+  }
+  img {
+    max-height: 300px;
+    object-fit: cover;
+  }
+  .absolute.inset-0.bg-gradient-to-b, .absolute.inset-0.bg-gradient-to-r {
+    display: none !important;
+  }
+  .h-\[85vh\] {
+    height: auto !important;
+    min-height: 300px;
+  }
+}

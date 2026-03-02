@@ -4,16 +4,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Euro, MapPin, Calendar, Home, MessageSquare, Plane, Hotel,
   Sun, ShieldCheck, ArrowRight, Plus, Minus, Loader2, Star,
   CheckCircle2, AlertTriangle, ChevronRight, ExternalLink, Utensils,
-  Clock, Lightbulb, Smartphone, Train
+  Clock, Lightbulb, Smartphone, Train, Download, Search
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { generateTravelPlan, type TravelInputs } from './services/travelService';
+import { generateTravelPlan, summarizeAccommodationReviews, type TravelInputs } from './services/travelService';
 import { TravelMap } from './components/TravelMap';
 import 'leaflet/dist/leaflet.css';
 
@@ -182,9 +182,121 @@ function Badge({ children, color = 'default' }: { children: React.ReactNode; col
   );
 }
 
+function AccommodationReviewer() {
+  const [name, setName] = useState('');
+  const [city, setCity] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !city) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await summarizeAccommodationReviews(name, city);
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message || "Errore durante la ricerca delle recensioni.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="glass p-8 rounded-[2rem] mt-12 print:hidden">
+      <h3 className="text-2xl mb-4 flex items-center gap-2">
+        <Search className="w-5 h-5 text-brand-accent" /> Analizza recensioni alloggio
+      </h3>
+      <p className="text-sm text-brand-ink/60 mb-6">
+        Inserisci il nome di un alloggio per cercare recensioni su Booking e TripAdvisor.
+      </p>
+      <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mb-6">
+        <input
+          type="text"
+          placeholder="Nome alloggio (es. Hilton)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="flex-1 bg-white border border-brand-ink/10 rounded-xl px-4 py-3 text-sm focus:border-brand-accent outline-none"
+          required
+        />
+        <input
+          type="text"
+          placeholder="Città (es. Roma)"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          className="flex-1 bg-white border border-brand-ink/10 rounded-xl px-4 py-3 text-sm focus:border-brand-accent outline-none"
+          required
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-brand-accent text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-brand-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          Cerca
+        </button>
+      </form>
+
+      {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
+      {result && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl p-6 border border-brand-ink/5">
+          <p className="text-sm leading-relaxed mb-6">{result.summary}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">Punti di forza</h4>
+              <ul className="space-y-2">
+                {(result.pros || []).map((pro: string, i: number) => (
+                  <li key={i} className="text-sm flex items-start gap-2">
+                    <Plus className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {pro}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-red-600 mb-3">Punti deboli</h4>
+              <ul className="space-y-2">
+                {(result.cons || []).map((con: string, i: number) => (
+                  <li key={i} className="text-sm flex items-start gap-2">
+                    <Minus className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {con}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-brand-ink/5 pt-4">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-ink/40 mb-3">Cerca su</h4>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={`https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
+              >
+                Booking.com <ExternalLink className="w-3 h-3" />
+              </a>
+              <a
+                href={`https://www.google.com/search?q=tripadvisor+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
+              >
+                TripAdvisor <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
 // ─── RESULTS VIEW ─────────────────────────────────────────────────────────────
 
-function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
+function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void }) {
+  const [modifyText, setModifyText] = useState("");
   const heroUrl = getImageUrl({ imageUrl: plan.destinationOverview?.heroImageUrl }, plan.destinationOverview?.title + ' landscape');
 
   // Costruisci mapPoints aggregando tutti i punti con coordinate valide
@@ -202,34 +314,42 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
   return (
     <div className="min-h-screen bg-brand-paper pb-24">
       {/* HERO */}
-      <section className="relative h-[85vh] overflow-hidden">
+      <section className="relative h-[85vh] print:h-auto print:min-h-[300px] overflow-hidden">
         <img
           src={heroUrl}
           alt={plan.destinationOverview?.title}
           onError={handleImageError}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover print:relative print:max-h-[300px]"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-brand-paper" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-brand-paper print:hidden" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent print:hidden" />
 
-        <button
-          onClick={onReset}
-          className="absolute top-8 left-8 bg-white/90 backdrop-blur px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-white transition-colors shadow-md z-10"
-        >
-          <ArrowRight className="rotate-180 w-4 h-4" /> Nuova ricerca
-        </button>
+        <div className="absolute top-8 left-8 flex gap-4 z-10 print:hidden">
+          <button
+            onClick={onReset}
+            className="bg-white/90 backdrop-blur px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-white transition-colors shadow-md"
+          >
+            <ArrowRight className="rotate-180 w-4 h-4" /> Nuova ricerca
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="bg-brand-accent text-white px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-brand-accent/90 transition-colors shadow-md"
+          >
+            <Download className="w-4 h-4" /> Salva PDF
+          </button>
+        </div>
 
-        <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-16 lg:p-24">
+        <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-16 lg:p-24 print:relative print:p-8 print:bg-white">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl">
             {plan.destinationOverview?.tagline && (
-              <p className="text-white/70 text-sm font-sans uppercase tracking-[0.2em] mb-3">
+              <p className="text-white/70 print:text-brand-ink/70 text-sm font-sans uppercase tracking-[0.2em] mb-3">
                 {plan.destinationOverview.tagline}
               </p>
             )}
-            <h1 className="text-7xl md:text-[7rem] text-white leading-none mb-6 drop-shadow-lg">
+            <h1 className="text-7xl md:text-[7rem] text-white print:text-brand-ink leading-none mb-6 drop-shadow-lg print:drop-shadow-none">
               {plan.destinationOverview?.title}
             </h1>
-            <p className="text-xl text-white/85 font-serif italic max-w-2xl leading-relaxed">
+            <p className="text-xl text-white/85 print:text-brand-ink/85 font-serif italic max-w-2xl leading-relaxed">
               {plan.destinationOverview?.description}
             </p>
           </motion.div>
@@ -269,29 +389,22 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.08 }}
-                className="group relative aspect-[4/5] overflow-hidden rounded-3xl shadow-md block hover:shadow-xl transition-shadow"
+                className="group relative bg-white border border-brand-ink/5 p-6 rounded-3xl shadow-sm block hover:shadow-md transition-shadow"
               >
-                <img
-                  src={getImageUrl(attr, attr.name + ' ' + (attr.category || 'travel'))}
-                  alt={attr.name}
-                  onError={handleImageError}
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent p-6 flex flex-col justify-end">
+                <div className="flex flex-col h-full">
                   {attr.category && (
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-2">{attr.category}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-2">{attr.category}</span>
                   )}
-                  <h3 className="text-2xl text-white mb-2 leading-tight">
+                  <h3 className="text-2xl text-brand-ink mb-2 leading-tight group-hover:text-brand-accent transition-colors">
                     {attr.name}
                   </h3>
-                  <p className="text-white/70 text-sm leading-relaxed line-clamp-3">{attr.description}</p>
+                  <p className="text-brand-ink/70 text-sm leading-relaxed flex-grow">{attr.description}</p>
                   {attr.estimatedVisitTime && (
-                    <div className="mt-3 flex items-center gap-1.5 text-white/50 text-xs">
+                    <div className="mt-4 flex items-center gap-1.5 text-brand-ink/50 text-xs">
                       <Clock className="w-3 h-3" /> {attr.estimatedVisitTime}
                     </div>
                   )}
-                  <div className="mt-3 flex items-center gap-1.5 text-[10px] text-white/40 font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
                     <ExternalLink className="w-3 h-3" /> Scopri di più
                   </div>
                 </div>
@@ -304,16 +417,26 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-20">
           {/* Meteo */}
           <div className="glass p-8 rounded-[2rem] lg:col-span-2">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-amber-50 rounded-2xl">
-                <Sun className="text-amber-500 w-6 h-6" />
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-50 rounded-2xl">
+                  <Sun className="text-amber-500 w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-3xl">Meteo e stagione</h2>
+                  {plan.weatherInfo?.averageTemp && (
+                    <p className="text-brand-ink/40 text-sm">{plan.weatherInfo.averageTemp} in media</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <h2 className="text-3xl">Meteo e stagione</h2>
-                {plan.weatherInfo?.averageTemp && (
-                  <p className="text-brand-ink/40 text-sm">{plan.weatherInfo.averageTemp} in media</p>
-                )}
-              </div>
+              <a 
+                href={`https://www.google.com/search?q=site:climaeviaggi.it+${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-600 bg-amber-50 px-4 py-2 rounded-full hover:bg-amber-100 transition-colors"
+              >
+                Clima e Viaggi <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
             <p className="text-brand-ink/80 leading-relaxed mb-6">{plan.weatherInfo?.summary}</p>
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -336,11 +459,21 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
 
           {/* Sicurezza */}
           <div className="glass p-8 rounded-[2rem]">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-emerald-50 rounded-2xl">
-                <ShieldCheck className="text-emerald-600 w-6 h-6" />
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-50 rounded-2xl">
+                  <ShieldCheck className="text-emerald-600 w-6 h-6" />
+                </div>
+                <h2 className="text-3xl">Sicurezza</h2>
               </div>
-              <h2 className="text-3xl">Sicurezza</h2>
+              <a 
+                href={`https://www.google.com/search?q=site:viaggiaresicuri.it+${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full hover:bg-emerald-100 transition-colors"
+              >
+                Viaggiare Sicuri <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
             {plan.safetyAndHealth?.safetyLevel && (
               <div className="mb-4">
@@ -440,46 +573,49 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
                       href={getSafeLink(act.sourceUrl, act.name || act.description)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group bg-white rounded-3xl border border-brand-ink/5 hover:shadow-md transition-all overflow-hidden block"
+                      className="group bg-white rounded-3xl border border-brand-ink/5 p-6 hover:shadow-md transition-all block"
                     >
-                      {(act.imageUrl || act.name) && (
-                        <div className="h-44 overflow-hidden">
-                          <img
-                            src={getImageUrl(act, (act.name || act.description || 'travel') + ' ' + (plan.destinationOverview?.title || ''))}
-                            alt={act.name || act.description}
-                            onError={handleImageError}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                        </div>
-                      )}
-                      <div className="p-6">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono bg-brand-paper px-2 py-0.5 rounded-md text-brand-ink/60">{act.time}</span>
-                            {act.duration && (
-                              <span className="text-xs text-brand-ink/40 flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> {act.duration}
-                              </span>
-                            )}
-                          </div>
-                          {act.costEstimate !== undefined && (
-                            <span className="text-sm font-bold text-brand-accent">
-                              {act.costEstimate === 0 ? 'Gratis' : `€${act.costEstimate}`}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono bg-brand-paper px-2 py-0.5 rounded-md text-brand-ink/60">{act.time}</span>
+                          {act.duration && (
+                            <span className="text-xs text-brand-ink/40 flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> {act.duration}
                             </span>
                           )}
                         </div>
-                        {act.name && <h4 className="text-lg font-serif mb-2 leading-tight">{act.name}</h4>}
-                        <p className="text-brand-ink/70 text-sm leading-relaxed">{act.description}</p>
-                        {act.tips && (
-                          <div className="mt-3 flex items-start gap-2 bg-amber-50 p-3 rounded-xl">
-                            <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-800 leading-relaxed">{act.tips}</p>
-                          </div>
+                        {act.costEstimate !== undefined && (
+                          <span className="text-sm font-bold text-brand-accent">
+                            {act.costEstimate === 0 ? 'Gratis' : `€${act.costEstimate}`}
+                          </span>
                         )}
-                        <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest">
-                          <ExternalLink className="w-3 h-3" /> Verifica sul web
+                      </div>
+                      {act.name && <h4 className="text-lg font-serif mb-2 leading-tight group-hover:text-brand-accent transition-colors">{act.name}</h4>}
+                      <p className="text-brand-ink/70 text-sm leading-relaxed">{act.description}</p>
+                      
+                      {(act.transport || act.travelTime) && (
+                        <div className="mt-4 pt-4 border-t border-brand-ink/5 flex flex-wrap gap-3">
+                          {act.transport && (
+                            <div className="flex items-center gap-1.5 text-xs text-brand-ink/50">
+                              <Train className="w-3.5 h-3.5" /> {act.transport}
+                            </div>
+                          )}
+                          {act.travelTime && (
+                            <div className="flex items-center gap-1.5 text-xs text-brand-ink/50">
+                              <Clock className="w-3.5 h-3.5" /> {act.travelTime}
+                            </div>
+                          )}
                         </div>
+                      )}
+
+                      {act.tips && (
+                        <div className="mt-3 flex items-start gap-2 bg-amber-50 p-3 rounded-xl">
+                          <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-800 leading-relaxed">{act.tips}</p>
+                        </div>
+                      )}
+                      <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ExternalLink className="w-3 h-3" /> Verifica sul web
                       </div>
                     </a>
                   ))}
@@ -504,10 +640,22 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
 
         {/* VOLI */}
         <section className="mb-20">
-          <h2 className="text-4xl mb-2 flex items-center gap-3">
-            <Plane className="w-7 h-7" /> Voli suggeriti
-          </h2>
-          <p className="text-brand-ink/50 mb-8 font-sans text-sm">Prezzi indicativi — verifica disponibilità sulle piattaforme di prenotazione</p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+              <h2 className="text-4xl mb-2 flex items-center gap-3">
+                <Plane className="w-7 h-7" /> Voli suggeriti
+              </h2>
+              <p className="text-brand-ink/50 font-sans text-sm">Prezzi indicativi — verifica disponibilità sulle piattaforme di prenotazione</p>
+            </div>
+            <a
+              href={`https://www.google.com/travel/flights?q=Flights%20to%20${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}%20from%20${encodeURIComponent(inputs?.departureCity || '')}%20on%20${inputs?.startDate || ''}%20through%20${inputs?.endDate || ''}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 bg-blue-50 text-blue-600 px-6 py-3 rounded-full font-bold text-sm hover:bg-blue-100 transition-colors"
+            >
+              Cerca su Google Flights <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {(plan.flights || []).map((flight: any, i: number) => (
               <a
@@ -558,53 +706,53 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {(stop.options || []).map((hotel: any, j: number) => (
-                    <ImageCard
+                    <a
                       key={j}
-                      item={hotel}
-                      imageKeyword={hotel.name + ' hotel room interior'}
                       href={getSafeLink(hotel.bookingUrl, hotel.name + ' hotel')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group block bg-white rounded-3xl shadow-sm border border-brand-ink/5 p-6 hover:shadow-md transition-all duration-300"
                     >
-                      <div className="p-6">
-                        <div className="flex justify-between items-start mb-1">
-                          <h4 className="text-lg font-serif leading-tight group-hover:text-brand-accent transition-colors pr-2">
-                            {hotel.name}
-                          </h4>
-                          {hotel.stars && (
-                            <div className="flex shrink-0">
-                              {Array.from({ length: hotel.stars }).map((_, k) => (
-                                <Star key={k} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{hotel.type}</p>
-                        {hotel.rating && <StarRating value={hotel.rating} />}
-                        {hotel.address && (
-                          <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
-                            <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {hotel.address}
-                          </p>
-                        )}
-                        <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
-                          "{hotel.reviewSummary}"
-                        </p>
-                        {(hotel.amenities || []).length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-3">
-                            {hotel.amenities.slice(0, 3).map((a: string, k: number) => (
-                              <Badge key={k}>{a}</Badge>
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className="text-lg font-serif leading-tight group-hover:text-brand-accent transition-colors pr-2">
+                          {hotel.name}
+                        </h4>
+                        {hotel.stars && (
+                          <div className="flex shrink-0">
+                            {Array.from({ length: hotel.stars }).map((_, k) => (
+                              <Star key={k} className="w-3 h-3 fill-amber-400 text-amber-400" />
                             ))}
                           </div>
                         )}
-                        <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
-                          <span className="text-xs text-brand-ink/40">per notte</span>
-                          <span className="font-bold text-lg">€{hotel.estimatedPricePerNight}</span>
-                        </div>
                       </div>
-                    </ImageCard>
+                      <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{hotel.type}</p>
+                      {hotel.rating && <StarRating value={hotel.rating} />}
+                      {hotel.address && (
+                        <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
+                          <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {hotel.address}
+                        </p>
+                      )}
+                      <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
+                        "{hotel.reviewSummary}"
+                      </p>
+                      {(hotel.amenities || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-3">
+                          {hotel.amenities.slice(0, 3).map((a: string, k: number) => (
+                            <Badge key={k}>{a}</Badge>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
+                        <span className="text-xs text-brand-ink/40">per notte</span>
+                        <span className="font-bold text-lg">€{hotel.estimatedPricePerNight}</span>
+                      </div>
+                    </a>
                   ))}
                 </div>
               </div>
             ))}
           </div>
+          <AccommodationReviewer />
         </section>
 
         {/* RISTORANTI */}
@@ -616,36 +764,35 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
             <p className="text-brand-ink/50 mb-10 font-sans text-sm">Ristoranti locali autentici, selezionati per qualità e genuinità</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {plan.bestRestaurants.map((rest: any, i: number) => (
-                <ImageCard
+                <a
                   key={i}
-                  item={rest}
-                  imageKeyword={rest.name + ' food restaurant ' + rest.cuisineType}
                   href={getSafeLink(rest.sourceUrl, rest.name + ' ristorante')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block bg-white rounded-3xl shadow-sm border border-brand-ink/5 p-6 hover:shadow-md transition-all duration-300"
                 >
-                  <div className="p-6">
-                    <h4 className="text-lg font-serif mb-0.5 group-hover:text-brand-accent transition-colors">{rest.name}</h4>
-                    <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{rest.cuisineType}</p>
-                    {rest.rating && <StarRating value={rest.rating} />}
-                    {rest.address && (
-                      <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
-                        <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {rest.address}
-                      </p>
-                    )}
-                    <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
-                      "{rest.reviewSummary}"
+                  <h4 className="text-lg font-serif mb-0.5 group-hover:text-brand-accent transition-colors">{rest.name}</h4>
+                  <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{rest.cuisineType}</p>
+                  {rest.rating && <StarRating value={rest.rating} />}
+                  {rest.address && (
+                    <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
+                      <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {rest.address}
                     </p>
-                    {rest.mustTry && (
-                      <div className="mt-3 bg-orange-50 p-3 rounded-xl">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-0.5">Da provare</p>
-                        <p className="text-xs text-orange-800">{rest.mustTry}</p>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
-                      <span className="text-xs text-brand-ink/40">Fascia di prezzo</span>
-                      <span className="font-bold">{rest.priceRange}</span>
+                  )}
+                  <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
+                    "{rest.reviewSummary}"
+                  </p>
+                  {rest.mustTry && (
+                    <div className="mt-3 bg-orange-50 p-3 rounded-xl">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-0.5">Da provare</p>
+                      <p className="text-xs text-orange-800">{rest.mustTry}</p>
                     </div>
+                  )}
+                  <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
+                    <span className="text-xs text-brand-ink/40">Fascia di prezzo</span>
+                    <span className="font-bold">{rest.priceRange}</span>
                   </div>
-                </ImageCard>
+                </a>
               ))}
             </div>
           </section>
@@ -703,6 +850,68 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
           </section>
         )}
 
+        {/* TRAVEL BLOGS */}
+        {plan.travelBlogs && plan.travelBlogs.length > 0 && (
+          <section className="mb-20">
+            <h2 className="text-5xl mb-2">Ispirazioni</h2>
+            <p className="text-brand-ink/50 mb-8 font-sans text-sm">Articoli e blog di viaggio per approfondire</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {plan.travelBlogs.map((blog: any, i: number) => (
+                <a
+                  key={i}
+                  href={getSafeLink(blog.url, blog.title)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block bg-white rounded-3xl shadow-sm border border-brand-ink/5 p-6 hover:shadow-md transition-all duration-300"
+                >
+                  <h4 className="text-lg font-serif mb-2 group-hover:text-brand-accent transition-colors leading-tight">{blog.title}</h4>
+                  {blog.description && (
+                    <p className="text-sm text-brand-ink/60 leading-relaxed line-clamp-3">
+                      {blog.description}
+                    </p>
+                  )}
+                  <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ExternalLink className="w-3 h-3" /> Leggi l'articolo
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* MODIFY REQUEST */}
+        <section className="mb-20">
+          <div className="bg-brand-paper p-8 rounded-[2rem] border border-brand-ink/10 shadow-sm">
+            <h3 className="text-2xl font-serif mb-4 flex items-center gap-2">
+              <MessageSquare className="w-6 h-6 text-brand-accent" />
+              Vuoi modificare o aggiungere qualcosa?
+            </h3>
+            <p className="text-brand-ink/60 text-sm mb-6">
+              L'itinerario non è perfetto? Chiedimi di cambiare hotel, aggiungere un giorno, o cercare attività diverse.
+            </p>
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                <MessageSquare className="w-3 h-3" /> Desideri e note per l'aggiornamento
+              </label>
+              <textarea 
+                className="w-full bg-white border border-brand-ink/10 rounded-2xl p-5 min-h-[120px] text-sm leading-relaxed focus:ring-2 ring-brand-accent/20 outline-none transition-all resize-none placeholder:text-brand-ink/25"
+                placeholder="Es. Aggiungi un giorno a Parigi, cambia l'hotel con uno più economico..."
+                value={modifyText}
+                onChange={(e) => setModifyText(e.target.value)}
+              />
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => onModify(modifyText)}
+                disabled={!modifyText.trim()}
+                className="bg-brand-accent text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-3 hover:bg-brand-accent/85 transition-all disabled:opacity-50 shadow-lg shadow-brand-accent/25 group w-full md:w-auto justify-center"
+              >
+                Aggiorna Itinerario <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </section>
+
       </div>
     </div>
   );
@@ -711,9 +920,10 @@ function ResultsView({ plan, onReset }: { plan: any; onReset: () => void }) {
 // ─── FORM VIEW ────────────────────────────────────────────────────────────────
 
 function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean }) {
-  const [inputs, setInputs] = useState<TravelInputs>({
+  const [inputs, setInputs] = useState<TravelInputs & { budgetInput: string }>({
     people: { adults: 2, children: [] },
     budget: 2000,
+    budgetInput: '2000',
     departureCity: '',
     destination: '',
     startDate: '',
@@ -738,208 +948,265 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(inputs);
+    const finalInputs = { ...inputs, budget: parseInt(inputs.budgetInput) || 0 };
+    onSubmit(finalInputs);
   };
 
   return (
-    <div className="min-h-screen bg-brand-paper flex flex-col items-center justify-center p-6">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl w-full">
-        <div className="text-center mb-12">
-          <h1 className="text-7xl md:text-9xl mb-4 leading-none">Vagabond</h1>
-          <p className="text-lg md:text-xl font-serif italic text-brand-ink/50">
+    <div className="min-h-screen bg-brand-paper flex flex-col lg:flex-row">
+      {/* Left Side - Image & Branding */}
+      <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col justify-end p-8 md:p-16 overflow-hidden">
+        <img 
+          src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop" 
+          alt="Travel Inspiration" 
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-brand-ink/10" />
+        
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10">
+          <h1 className="text-7xl md:text-8xl xl:text-9xl mb-4 text-white leading-none drop-shadow-lg">Vagabond</h1>
+          <p className="text-lg md:text-xl font-serif italic text-white/90 max-w-md drop-shadow-md">
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>
-        </div>
+        </motion.div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="glass p-8 md:p-12 rounded-[3rem] shadow-2xl space-y-10">
+      {/* Right Side - Form */}
+      <div className="lg:w-7/12 flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto p-6 md:p-12 lg:p-16 xl:p-20">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+            <h2 className="text-3xl md:text-4xl mb-2 font-serif">Crea il tuo itinerario</h2>
+            <p className="text-brand-ink/50 mb-10 text-sm">Raccontami i tuoi desideri, penserò io a tutto il resto.</p>
 
-          {/* Partenza & Destinazione */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                <Plane className="w-3 h-3" /> Da dove parti?
-              </label>
-              <input
-                required
-                type="text"
-                placeholder="Milano, Roma…"
-                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-2xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
-                value={inputs.departureCity}
-                onChange={(e) => setInputs((p) => ({ ...p, departureCity: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                <MapPin className="w-3 h-3" /> Dove vuoi andare?
-              </label>
-              <input
-                required
-                type="text"
-                placeholder="Islanda, Giappone, Bali…"
-                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-2xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
-                value={inputs.destination}
-                onChange={(e) => setInputs((p) => ({ ...p, destination: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          {/* Chi viaggia + Budget */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                <Users className="w-3 h-3" /> Chi viaggia?
-              </label>
-              <div className="flex items-center gap-8">
-                <div>
-                  <span className="text-xs text-brand-ink/40 block mb-2">Adulti</span>
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => setInputs((p) => ({ ...p, people: { ...p.people, adults: Math.max(1, p.people.adults - 1) } }))}
-                      className="w-8 h-8 rounded-full border border-brand-ink/20 flex items-center justify-center hover:bg-brand-ink/5 transition-colors">
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="text-2xl font-serif w-6 text-center">{inputs.people.adults}</span>
-                    <button type="button" onClick={() => setInputs((p) => ({ ...p, people: { ...p.people, adults: p.people.adults + 1 } }))}
-                      className="w-8 h-8 rounded-full border border-brand-ink/20 flex items-center justify-center hover:bg-brand-ink/5 transition-colors">
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
+            <form onSubmit={handleSubmit} className="space-y-10">
+              {/* Partenza & Destinazione */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Plane className="w-3 h-3" /> Da dove parti?
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Milano, Roma…"
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
+                    value={inputs.departureCity}
+                    onChange={(e) => setInputs((p) => ({ ...p, departureCity: e.target.value }))}
+                  />
                 </div>
-                <div>
-                  <span className="text-xs text-brand-ink/40 block mb-2">Bambini</span>
-                  <button type="button" onClick={handleAddChild}
-                    className="flex items-center gap-1.5 text-brand-accent text-sm font-bold hover:text-brand-accent/70 transition-colors">
-                    <Plus className="w-4 h-4" /> Aggiungi
-                  </button>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <MapPin className="w-3 h-3" /> Dove vuoi andare?
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Islanda, Giappone, Bali…"
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
+                    value={inputs.destination}
+                    onChange={(e) => setInputs((p) => ({ ...p, destination: e.target.value }))}
+                  />
                 </div>
               </div>
-              <AnimatePresence>
-                {inputs.people.children.length > 0 && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-2">
-                    {inputs.people.children.map((child, i) => (
-                      <div key={i} className="flex items-center justify-between bg-brand-ink/5 p-3 rounded-xl">
-                        <span className="text-sm text-brand-ink/60">Bambino {i + 1}</span>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => handleChildAge(i, Math.max(0, child.age - 1))}
-                              className="w-6 h-6 rounded-full bg-white border border-brand-ink/10 flex items-center justify-center">
-                              <Minus className="w-2.5 h-2.5" />
-                            </button>
-                            <span className="text-sm font-bold w-4 text-center">{child.age}</span>
-                            <button type="button" onClick={() => handleChildAge(i, Math.min(17, child.age + 1))}
-                              className="w-6 h-6 rounded-full bg-white border border-brand-ink/10 flex items-center justify-center">
-                              <Plus className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                          <span className="text-xs text-brand-ink/40">anni</span>
-                          <button type="button" onClick={() => handleRemoveChild(i)} className="text-red-400 hover:text-red-600 transition-colors">
-                            <Minus className="w-4 h-4" />
-                          </button>
-                        </div>
+
+              {/* Stopover & Orario Partenza */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Plane className="w-3 h-3" /> Eventuale stop over (opzionale)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Es. Dubai, Londra..."
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
+                    value={inputs.stopover || ''}
+                    onChange={(e) => setInputs((p) => ({ ...p, stopover: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Clock className="w-3 h-3" /> Orario di partenza preferito
+                  </label>
+                  <select
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
+                    value={inputs.departureTimePreference || 'Indifferente'}
+                    onChange={(e) => setInputs((p) => ({ ...p, departureTimePreference: e.target.value }))}
+                  >
+                    <option value="Indifferente">Indifferente</option>
+                    <option value="Mattina">Mattina</option>
+                    <option value="Pomeriggio">Pomeriggio</option>
+                    <option value="Sera">Sera</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Chi viaggia + Budget */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Users className="w-3 h-3" /> Chi viaggia?
+                  </label>
+                  <div className="flex items-center gap-8">
+                    <div>
+                      <span className="text-xs text-brand-ink/40 block mb-2">Adulti</span>
+                      <div className="flex items-center gap-3">
+                        <button type="button" onClick={() => setInputs((p) => ({ ...p, people: { ...p.people, adults: Math.max(1, p.people.adults - 1) } }))}
+                          className="w-8 h-8 rounded-full border border-brand-ink/20 flex items-center justify-center hover:bg-brand-ink/5 transition-colors">
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-2xl font-serif w-6 text-center">{inputs.people.adults}</span>
+                        <button type="button" onClick={() => setInputs((p) => ({ ...p, people: { ...p.people, adults: p.people.adults + 1 } }))}
+                          className="w-8 h-8 rounded-full border border-brand-ink/20 flex items-center justify-center hover:bg-brand-ink/5 transition-colors">
+                          <Plus className="w-3 h-3" />
+                        </button>
                       </div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-brand-ink/40 block mb-2">Bambini</span>
+                      <button type="button" onClick={handleAddChild}
+                        className="flex items-center gap-1.5 text-brand-accent text-sm font-bold hover:text-brand-accent/70 transition-colors">
+                        <Plus className="w-4 h-4" /> Aggiungi
+                      </button>
+                    </div>
+                  </div>
+                  <AnimatePresence>
+                    {inputs.people.children.length > 0 && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-2">
+                        {inputs.people.children.map((child, i) => (
+                          <div key={i} className="flex items-center justify-between bg-brand-ink/5 p-3 rounded-xl">
+                            <span className="text-sm text-brand-ink/60">Bambino {i + 1}</span>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2">
+                                <button type="button" onClick={() => handleChildAge(i, Math.max(0, child.age - 1))}
+                                  className="w-6 h-6 rounded-full bg-white border border-brand-ink/10 flex items-center justify-center">
+                                  <Minus className="w-2.5 h-2.5" />
+                                </button>
+                                <span className="text-sm font-bold w-4 text-center">{child.age}</span>
+                                <button type="button" onClick={() => handleChildAge(i, Math.min(17, child.age + 1))}
+                                  className="w-6 h-6 rounded-full bg-white border border-brand-ink/10 flex items-center justify-center">
+                                  <Plus className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                              <span className="text-xs text-brand-ink/40">anni</span>
+                              <button type="button" onClick={() => handleRemoveChild(i)} className="text-red-400 hover:text-red-600 transition-colors">
+                                <Minus className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                <Euro className="w-3 h-3" /> Budget totale
-              </label>
-              <div className="relative">
-                <input
-                  required
-                  type="number"
-                  min="100"
-                  className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-2xl focus:border-brand-accent outline-none transition-colors pr-8"
-                  value={inputs.budget}
-                  onChange={(e) => setInputs((p) => ({ ...p, budget: parseInt(e.target.value) || 0 }))}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Euro className="w-3 h-3" /> Budget totale
+                  </label>
+                  <div className="relative">
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-2xl focus:border-brand-accent outline-none transition-colors pr-8"
+                      value={inputs.budgetInput}
+                      onChange={(e) => setInputs((p) => ({ ...p, budgetInput: e.target.value }))}
+                    />
+                    <span className="absolute right-0 bottom-3.5 text-xl text-brand-ink/30">€</span>
+                  </div>
+                  <p className="text-[10px] text-brand-ink/30 italic">Include voli, alloggi, attività e pasti.</p>
+                </div>
+              </div>
+
+              {/* Date */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Calendar className="w-3 h-3" /> Quando?
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-[10px] text-brand-ink/30 uppercase block mb-1">Partenza</span>
+                      <input required type="date" className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-base focus:border-brand-accent outline-none transition-colors"
+                        value={inputs.startDate} onChange={(e) => {
+                          const newStart = e.target.value;
+                          setInputs((p) => ({ 
+                            ...p, 
+                            startDate: newStart,
+                            endDate: p.endDate && p.endDate < newStart ? newStart : p.endDate
+                          }));
+                        }} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-brand-ink/30 uppercase block mb-1">Ritorno</span>
+                      <input required type="date" min={inputs.startDate} className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-base focus:border-brand-accent outline-none transition-colors"
+                        value={inputs.endDate} onChange={(e) => setInputs((p) => ({ ...p, endDate: e.target.value }))} />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-3 cursor-pointer group mt-2">
+                    <div className="relative">
+                      <input type="checkbox" className="sr-only" checked={inputs.isPeriodFlexible}
+                        onChange={(e) => setInputs((p) => ({ ...p, isPeriodFlexible: e.target.checked }))} />
+                      <div className={cn('w-10 h-5 rounded-full transition-colors duration-300', inputs.isPeriodFlexible ? 'bg-brand-accent' : 'bg-brand-ink/15')} />
+                      <div className={cn('absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow transition-transform duration-300', inputs.isPeriodFlexible && 'translate-x-5')} />
+                    </div>
+                    <span className="text-sm text-brand-ink/50 group-hover:text-brand-ink transition-colors">Date flessibili (±3 giorni)</span>
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Home className="w-3 h-3" /> Tipologia alloggio
+                  </label>
+                  <select
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
+                    value={inputs.accommodationType}
+                    onChange={(e) => setInputs((p) => ({ ...p, accommodationType: e.target.value }))}
+                  >
+                    <option>Hotel di charme</option>
+                    <option>No Resort — Boutique Hotel</option>
+                    <option>B&B locali</option>
+                    <option>Appartamenti o ville</option>
+                    <option>Esperienze uniche (glamping, ryokan…)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Note */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                  <MessageSquare className="w-3 h-3" /> Desideri e note
+                </label>
+                <textarea
+                  placeholder="Es: voglio evitare le zone turistiche, preferisco ristoranti dove mangiano i locali, mi piace l'arte contemporanea…"
+                  className="w-full bg-brand-ink/5 rounded-2xl p-5 min-h-[120px] text-sm leading-relaxed focus:ring-2 ring-brand-accent/20 outline-none transition-all resize-none placeholder:text-brand-ink/25"
+                  value={inputs.notes}
+                  onChange={(e) => setInputs((p) => ({ ...p, notes: e.target.value }))}
                 />
-                <span className="absolute right-0 bottom-3.5 text-xl text-brand-ink/30">€</span>
               </div>
-              <p className="text-[10px] text-brand-ink/30 italic">Include voli, alloggi, attività e pasti.</p>
-            </div>
-          </div>
 
-          {/* Date */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                <Calendar className="w-3 h-3" /> Quando?
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] text-brand-ink/30 uppercase block mb-1">Partenza</span>
-                  <input required type="date" className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-base focus:border-brand-accent outline-none transition-colors"
-                    value={inputs.startDate} onChange={(e) => setInputs((p) => ({ ...p, startDate: e.target.value }))} />
-                </div>
-                <div>
-                  <span className="text-[10px] text-brand-ink/30 uppercase block mb-1">Ritorno</span>
-                  <input required type="date" className="w-full bg-transparent border-b-2 border-brand-ink/10 py-2 text-base focus:border-brand-accent outline-none transition-colors"
-                    value={inputs.endDate} onChange={(e) => setInputs((p) => ({ ...p, endDate: e.target.value }))} />
-                </div>
-              </div>
-              <label className="flex items-center gap-3 cursor-pointer group mt-2">
-                <div className="relative">
-                  <input type="checkbox" className="sr-only" checked={inputs.isPeriodFlexible}
-                    onChange={(e) => setInputs((p) => ({ ...p, isPeriodFlexible: e.target.checked }))} />
-                  <div className={cn('w-10 h-5 rounded-full transition-colors duration-300', inputs.isPeriodFlexible ? 'bg-brand-accent' : 'bg-brand-ink/15')} />
-                  <div className={cn('absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow transition-transform duration-300', inputs.isPeriodFlexible && 'translate-x-5')} />
-                </div>
-                <span className="text-sm text-brand-ink/50 group-hover:text-brand-ink transition-colors">Date flessibili (±3 giorni)</span>
-              </label>
-            </div>
-
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                <Home className="w-3 h-3" /> Tipologia alloggio
-              </label>
-              <select
-                className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
-                value={inputs.accommodationType}
-                onChange={(e) => setInputs((p) => ({ ...p, accommodationType: e.target.value }))}
+              <button
+                disabled={loading}
+                type="submit"
+                className="w-full bg-brand-accent text-white py-5 rounded-2xl text-lg font-bold flex items-center justify-center gap-3 hover:bg-brand-accent/85 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/25 group"
               >
-                <option>Hotel di charme</option>
-                <option>No Resort — Boutique Hotel</option>
-                <option>B&B locali</option>
-                <option>Appartamenti o ville</option>
-                <option>Esperienze uniche (glamping, ryokan…)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Note */}
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-              <MessageSquare className="w-3 h-3" /> Desideri e note
-            </label>
-            <textarea
-              placeholder="Es: voglio evitare le zone turistiche, preferisco ristoranti dove mangiano i locali, mi piace l'arte contemporanea…"
-              className="w-full bg-brand-ink/5 rounded-2xl p-5 min-h-[120px] text-sm leading-relaxed focus:ring-2 ring-brand-accent/20 outline-none transition-all resize-none placeholder:text-brand-ink/25"
-              value={inputs.notes}
-              onChange={(e) => setInputs((p) => ({ ...p, notes: e.target.value }))}
-            />
-          </div>
-
-          <button
-            disabled={loading}
-            type="submit"
-            className="w-full bg-brand-accent text-white py-5 rounded-2xl text-lg font-bold flex items-center justify-center gap-3 hover:bg-brand-accent/85 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-accent/25 group"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Elaborazione in corso…
-              </>
-            ) : (
-              <>
-                Pianifica il mio viaggio
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </>
-            )}
-          </button>
-        </form>
-      </motion.div>
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Elaborazione in corso…
+                  </>
+                ) : (
+                  <>
+                    Pianifica il mio viaggio
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -950,6 +1217,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [plan, setPlan] = useState<any>(null);
+  const [lastInputs, setLastInputs] = useState<TravelInputs | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (inputs: TravelInputs) => {
@@ -957,6 +1225,7 @@ export default function App() {
     setLoadingStep('Inizializzazione...');
     setError(null);
     try {
+      setLastInputs(inputs);
       const result = await generateTravelPlan(inputs, (step) => setLoadingStep(step));
       setPlan(result);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -964,6 +1233,28 @@ export default function App() {
       console.error('Error generating plan:', err);
       // Show the actual error message from the backend
       setError(err.message || 'Si è verificato un errore durante la generazione del piano. Riprova tra qualche istante.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleModify = async (request: string) => {
+    if (!lastInputs || !plan) return;
+    setLoading(true);
+    setLoadingStep('Aggiorno l\'itinerario...');
+    setError(null);
+    try {
+      const modifiedInputs = {
+        ...lastInputs,
+        modificationRequest: request,
+        previousPlan: plan
+      };
+      const result = await generateTravelPlan(modifiedInputs, (step) => setLoadingStep(step));
+      setPlan(result);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err: any) {
+      console.error('Error modifying plan:', err);
+      setError(err.message || 'Si è verificato un errore durante l\'aggiornamento del piano. Riprova tra qualche istante.');
     } finally {
       setLoading(false);
     }
@@ -986,7 +1277,7 @@ export default function App() {
     );
   }
 
-  if (plan) return <ResultsView plan={plan} onReset={() => setPlan(null)} />;
+  if (plan) return <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} />;
 
   return <FormView onSubmit={handleSubmit} loading={loading} />;
 }

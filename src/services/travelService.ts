@@ -70,14 +70,24 @@ export const generateTravelPlan = async (
       (new Date(inputs.endDate).getTime() - new Date(inputs.startDate).getTime()) /
         (1000 * 60 * 60 * 24)
     );
+    const totalDays = nights + 1;
 
-    const prompt = `
+    const start = new Date(inputs.startDate);
+    const dateList = Array.from({ length: totalDays }).map((_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      return `- Giorno ${i + 1}: ${d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    }).join('\n');
+
+    let prompt = `
 Sei un esperto agente di viaggi con profonda conoscenza locale. Pianifica un viaggio REALE e CONCRETO.
 
 VIAGGIO:
 - Partenza: ${inputs.departureCity}
 - Destinazione: ${inputs.destination}
-- Periodo: ${inputs.startDate} -> ${inputs.endDate} (${nights} notti)
+- Stopover (Tappa intermedia): ${inputs.stopover || "Nessuno"}
+- Orario partenza preferito: ${inputs.departureTimePreference || "Indifferente"}
+- Periodo: ${inputs.startDate} -> ${inputs.endDate} (${nights} notti, ${totalDays} giorni)
 - Date flessibili: ${inputs.isPeriodFlexible ? "Sì" : "No"}
 - Gruppo: ${inputs.people.adults} adulti, ${inputs.people.children.length} bambini (età: ${inputs.people.children.map((c) => c.age).join(", ") || "N/A"})
 - Budget TOTALE: €${inputs.budget} per ${totalPeople} persone
@@ -85,14 +95,33 @@ VIAGGIO:
 - Note: ${inputs.notes || "nessuna"}
 
 REGOLE ASSOLUTE:
-1. IMMAGINI: NON USARE source.unsplash.com (è dismesso). Usa ESCLUSIVAMENTE: "https://loremflickr.com/800/600/[keyword-in-inglese]?lock=[numero-casuale]" (es. https://loremflickr.com/800/600/colosseum?lock=42).
-2. LINK: Usa SOLO URL affidabili: wikipedia.org, tripadvisor.com, booking.com. MAI inventare URL. Se non sei certo, usa: https://www.google.com/search?q=[nome+luogo+urlencoded]
-3. COORDINATE: Ogni luogo DEVE avere lat/lng precise (almeno 4 decimali).
+1. IMMAGINI: Usa il tool Google Search SOLO per trovare un'immagine panoramica REALE e pubblica per la destinazione principale (inseriscila in \`heroImageUrl\`). NON inserire immagini per attrazioni, attività, hotel o ristoranti.
+2. LINK: Usa SOLO URL affidabili e reali.
+3. COORDINATE E MAPPA: Ogni luogo DEVE avere lat/lng precise. Nel campo \`mapPoints\`, DEVI includere obbligatoriamente anche la città di partenza (${inputs.departureCity}) e la destinazione principale (${inputs.destination}).
 4. COSTI: Realistici. Totale non superiore a €${inputs.budget}.
-5. HOTEL REALI: Solo strutture che esistono davvero con nomi precisi.
-6. ITALIANO CORRETTO: Grammatica italiana perfetta, maiuscole corrette, nessun refuso.
-7. RISTORANTI REALI: Solo ristoranti verificabili con indirizzi reali.
-8. VELOCITÀ: Sii conciso nelle descrizioni per ridurre i tempi di generazione.
+5. HOTEL E RISTORANTI REALI: Solo strutture che esistono davvero con nomi precisi. Fornisci 2 opzioni di alloggio per OGNI tappa e 2 opzioni per i ristoranti.
+6. ITALIANO CORRETTO: Grammatica italiana perfetta.
+7. VELOCITÀ: Sii conciso nelle descrizioni.
+
+8. ITINERARIO COMPLETO E DETTAGLIATO: L'itinerario DEVE coprire TUTTI I ${totalDays} GIORNI del viaggio, senza saltarne nessuno.
+Ecco le date esatte per cui DEVI generare l'itinerario:
+${dateList}
+
+Per OGNI SINGOLO GIORNO dell'elenco qui sopra, DEVI creare un oggetto nell'array "itinerary" (quindi l'array "itinerary" DEVE avere esattamente ${totalDays} elementi).
+Il campo "title" di ogni giorno DEVE includere la data esatta (es. "1 aprile 2026 - Arrivo e prima esplorazione").
+Per ogni giorno, DEVI pianificare dettagliatamente:
+- Cosa fare la mattina
+- Dove pranzare
+- Cosa fare il pomeriggio
+- Dove cenare
+- Cosa fare la sera
+Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, la durata, i mezzi di trasporto e i tempi di percorrenza. Includi attività principali turistiche e non turistiche a seconda di quanto richiesto nelle note.
+
+9. METEO (CLIMA E VIAGGI): Per la sezione "weatherInfo", DEVI cercare su Google "clima e viaggi ${inputs.destination}" ed estrarre le informazioni ESATTE da quel sito per il mese del viaggio. Riassumi le temperature, il clima, i pro e i contro basandoti esclusivamente su quella fonte.
+
+10. VOLI (GOOGLE FLIGHTS): Genera opzioni di volo realistiche. Se è indicato uno stopover, crea un itinerario multitratta. Il link di prenotazione (\`bookingUrl\`) DEVE essere un link a Google Flights con i parametri corretti (es. https://www.google.com/travel/flights?q=Flights%20to%20${encodeURIComponent(inputs.destination)}%20from%20${encodeURIComponent(inputs.departureCity)}%20on%20${inputs.startDate}%20through%20${inputs.endDate}). Tieni conto dell'orario di partenza preferito (${inputs.departureTimePreference}) se specificato.
+
+11. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 10-15 parole). Sii telegrafico, vai dritto al punto. Non usare frasi lunghe.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
@@ -101,13 +130,12 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
     "title": "Nome Destinazione",
     "tagline": "Frase ispirazionale breve",
     "description": "Descrizione evocativa 2-3 frasi",
-    "heroImageUrl": "URL immagine panoramica da Unsplash o Wikimedia",
+    "heroImageUrl": "URL immagine reale",
     "attractions": [
       {
         "name": "Nome Attrazione",
         "description": "Descrizione 2 righe con dettagli pratici",
-        "sourceUrl": "URL Wikipedia o TripAdvisor reale",
-        "imageUrl": "https://loremflickr.com/...",
+        "sourceUrl": "URL reale",
         "lat": 0.0000,
         "lng": 0.0000,
         "category": "Cultura",
@@ -138,13 +166,14 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
         {
           "time": "09:00",
           "name": "Nome Attività",
-          "description": "Descrizione dettagliata con consigli pratici",
+          "description": "Max 10 parole",
           "costEstimate": 25,
           "sourceUrl": "URL affidabile",
-          "imageUrl": "https://loremflickr.com/...",
           "lat": 0.0000,
           "lng": 0.0000,
           "duration": "2 ore",
+          "transport": "Metro Linea 1",
+          "travelTime": "15 min",
           "tips": "Consiglio insider"
         }
       ]
@@ -180,10 +209,9 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
           "type": "Boutique Hotel",
           "stars": 4,
           "rating": 8.9,
-          "reviewSummary": "Recensione autentica breve",
+          "reviewSummary": "Max 10 parole",
           "estimatedPricePerNight": 150,
-          "bookingUrl": "https://www.booking.com/searchresults.it.html?ss=nome+hotel",
-          "imageUrl": "https://loremflickr.com/...",
+          "bookingUrl": "URL reale",
           "lat": 0.0000,
           "lng": 0.0000,
           "address": "Indirizzo reale",
@@ -197,9 +225,8 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
       "name": "Nome Ristorante Reale",
       "cuisineType": "Cucina locale",
       "rating": 9.0,
-      "reviewSummary": "Recensione breve autentica",
-      "sourceUrl": "https://www.tripadvisor.it/...",
-      "imageUrl": "https://loremflickr.com/...",
+      "reviewSummary": "Max 10 parole",
+      "sourceUrl": "URL reale",
       "priceRange": "€€",
       "address": "Indirizzo reale",
       "mustTry": "Piatto da non perdere",
@@ -215,11 +242,31 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
     "localTransport": "Come muoversi in loco",
     "bestApps": ["App utile 1", "App utile 2"],
     "estimatedLocalCost": "5-10€/giorno"
-  }
+  },
+  "travelBlogs": [
+    {
+      "title": "Titolo dell'articolo o del blog",
+      "url": "URL reale e funzionante",
+      "description": "Breve descrizione di cosa tratta l'articolo"
+    }
+  ]
 }
 `;
 
-    onProgress?.("Costruisco l'itinerario personalizzato...");
+    if (inputs.modificationRequest && inputs.previousPlan) {
+      prompt = `
+Sei un esperto agente di viaggi. Hai precedentemente generato questo piano di viaggio:
+${JSON.stringify(inputs.previousPlan)}
+
+L'utente ha richiesto le seguenti modifiche o aggiunte:
+"${inputs.modificationRequest}"
+
+Aggiorna il piano di viaggio tenendo conto di queste richieste. Mantieni la stessa struttura JSON esatta e le stesse REGOLE ASSOLUTE.
+Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
+`;
+    }
+
+    onProgress?.(inputs.modificationRequest ? "Aggiorno l'itinerario..." : "Costruisco l'itinerario personalizzato...");
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -227,6 +274,7 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
       config: {
         temperature: 0.3,
         responseMimeType: "application/json",
+        tools: [{ googleSearch: {} }],
       },
     });
 
@@ -253,5 +301,48 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
   } catch (error) {
     console.error("API call failed:", error);
     throw error;
+  }
+};
+
+export const summarizeAccommodationReviews = async (name: string, city: string) => {
+  let apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    if (process.env.API_KEY && process.env.API_KEY.length > 20) {
+      apiKey = process.env.API_KEY;
+    }
+  }
+  if (!apiKey) {
+    throw new Error("API Key non trovata.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+Sei un assistente di viaggio esperto. Cerca informazioni e recensioni per l'alloggio "${name}" a "${city}" su siti come Booking.com e TripAdvisor.
+Crea un riassunto delle recensioni (pro e contro principali).
+
+Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
+{
+  "summary": "Riassunto delle recensioni (circa 3-4 frasi)",
+  "pros": ["Pro 1", "Pro 2"],
+  "cons": ["Contro 1", "Contro 2"]
+}
+`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: {
+      temperature: 0.3,
+      responseMimeType: "application/json",
+      tools: [{ googleSearch: {} }],
+    },
+  });
+
+  const text = response.text || "";
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error("L'AI non ha restituito un JSON valido per le recensioni.");
   }
 };

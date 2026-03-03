@@ -66,6 +66,7 @@ export const TravelPlanSchema = z.object({
       activities: z.array(
         z.object({
           time: z.string(),
+          location: z.string().optional(),
           name: z.string().optional(),
           description: z.string(),
           costEstimate: z.number().optional(),

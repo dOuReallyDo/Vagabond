@@ -375,6 +375,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
       plan.itinerary?.forEach((day: any) => {
         rows.push({
           'Data / Ora': `Giorno ${day.day} - ${day.title}`,
+          'Luogo': '',
           'Attività': '',
           'Durata': '',
           'Costo Stimato': ''
@@ -384,6 +385,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
           const actTotal = (act.costEstimate || 0) * numPeople;
           rows.push({
             'Data / Ora': act.time,
+            'Luogo': act.location || '-',
             'Attività': act.name || act.description,
             'Durata': act.duration || '-',
             'Costo Stimato': act.costEstimate ? `€${actTotal} (€${act.costEstimate} x ${numPeople} pers.)` : 'Gratis / N.D.'
@@ -395,6 +397,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
       if (selectedFlight) {
         rows.push({
           'Data / Ora': 'Volo Selezionato',
+          'Luogo': '-',
           'Attività': `${selectedFlight.airline} (${selectedFlight.route})`,
           'Durata': selectedFlight.duration || '-',
           'Costo Stimato': `€${selectedFlight.estimatedPrice * numPeople} (€${selectedFlight.estimatedPrice} x ${numPeople} pers.)`
@@ -405,6 +408,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
       if (Object.keys(selectedAccommodations).length > 0) {
         rows.push({
           'Data / Ora': 'Alloggi Selezionati',
+          'Luogo': '',
           'Attività': '',
           'Durata': '',
           'Costo Stimato': ''
@@ -414,7 +418,8 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
           const nights = plan.accommodations[parseInt(stopIndex)]?.nights || 1;
           rows.push({
             'Data / Ora': '-',
-            'Attività': `${hotel.name} (${plan.accommodations[parseInt(stopIndex)]?.stopName})`,
+            'Luogo': plan.accommodations[parseInt(stopIndex)]?.stopName || '-',
+            'Attività': hotel.name,
             'Durata': `${nights} ${nights === 1 ? 'notte' : 'notti'}`,
             'Costo Stimato': `€${hotel.estimatedPricePerNight * nights} (€${hotel.estimatedPricePerNight}/notte)`
           });
@@ -424,6 +429,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
       // Aggiungi il totale
       rows.push({
         'Data / Ora': '',
+        'Luogo': '',
         'Attività': '',
         'Durata': 'Totale Stimato:',
         'Costo Stimato': `€${totalCost}`
@@ -437,6 +443,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
       // Imposta la larghezza delle colonne
       const wscols = [
         { wch: 25 }, // Data / Ora
+        { wch: 20 }, // Luogo
         { wch: 50 }, // Attività
         { wch: 15 }, // Durata
         { wch: 25 }  // Costo Stimato
@@ -1054,6 +1061,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                   <thead>
                     <tr className="bg-brand-paper/50 border-b border-brand-ink/5 text-[10px] uppercase tracking-widest text-brand-ink/40">
                       <th className="p-4 font-bold whitespace-nowrap">Data / Ora</th>
+                      <th className="p-4 font-bold">Luogo</th>
                       <th className="p-4 font-bold">Attività</th>
                       <th className="p-4 font-bold whitespace-nowrap">Durata</th>
                       <th className="p-4 font-bold whitespace-nowrap text-right">Costo Stimato</th>
@@ -1063,7 +1071,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                     {plan.itinerary.map((day: any, i: number) => (
                       <React.Fragment key={i}>
                         <tr className="bg-brand-paper/20">
-                          <td colSpan={4} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
+                          <td colSpan={5} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
                             Giorno {day.day} - {day.title}
                           </td>
                         </tr>
@@ -1073,6 +1081,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                           return (
                             <tr key={`${i}-${j}`} className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
                               <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">{act.time}</td>
+                              <td className="p-4 text-brand-ink/60 whitespace-nowrap">{act.location || '-'}</td>
                               <td className="p-4 font-medium">{act.name || act.description}</td>
                               <td className="p-4 text-brand-ink/60 whitespace-nowrap">{act.duration || '-'}</td>
                               <td className="p-4 text-right font-medium whitespace-nowrap">
@@ -1090,12 +1099,13 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                     {selectedFlight && (
                       <>
                         <tr className="bg-brand-paper/20">
-                          <td colSpan={4} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
+                          <td colSpan={5} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
                             Volo Selezionato
                           </td>
                         </tr>
                         <tr className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
                           <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">-</td>
+                          <td className="p-4 text-brand-ink/60 whitespace-nowrap">-</td>
                           <td className="p-4 font-medium">
                             {selectedFlight.airline} <span className="text-xs text-brand-ink/40 font-normal">({selectedFlight.route})</span>
                           </td>
@@ -1109,7 +1119,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                     {Object.keys(selectedAccommodations).length > 0 && (
                       <>
                         <tr className="bg-brand-paper/20">
-                          <td colSpan={4} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
+                          <td colSpan={5} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
                             Alloggi Selezionati
                           </td>
                         </tr>
@@ -1118,8 +1128,9 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                           return (
                             <tr key={`hotel-${stopIndex}`} className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
                               <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">-</td>
+                              <td className="p-4 text-brand-ink/60 whitespace-nowrap">{plan.accommodations[parseInt(stopIndex)]?.stopName}</td>
                               <td className="p-4 font-medium">
-                                {hotel.name} <span className="text-xs text-brand-ink/40 font-normal">({plan.accommodations[parseInt(stopIndex)]?.stopName})</span>
+                                {hotel.name}
                               </td>
                               <td className="p-4 text-brand-ink/60 whitespace-nowrap">{nights} {nights === 1 ? 'notte' : 'notti'}</td>
                               <td className="p-4 text-right font-medium whitespace-nowrap">
@@ -1133,7 +1144,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                   </tbody>
                   <tfoot>
                     <tr className="bg-brand-ink/5 border-t-2 border-brand-ink/10">
-                      <td colSpan={3} className="p-4 text-right font-serif font-bold text-lg">
+                      <td colSpan={4} className="p-4 text-right font-serif font-bold text-lg">
                         Totale Stimato:
                       </td>
                       <td className="p-4 text-right font-bold text-xl text-brand-accent whitespace-nowrap">

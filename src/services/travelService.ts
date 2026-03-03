@@ -121,11 +121,13 @@ Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, l
 
 10. VOLI (GOOGLE FLIGHTS): Genera opzioni di volo realistiche. Se è indicato uno stopover, crea un itinerario multitratta. Il link di prenotazione (\`bookingUrl\`) DEVE essere un link a Google Flights con i parametri corretti (es. https://www.google.com/travel/flights?q=Flights%20to%20\${encodeURIComponent(inputs.destination)}%20from%20\${encodeURIComponent(inputs.departureCity)}%20on%20\${inputs.startDate}%20through%20\${inputs.endDate}). Tieni conto dell'orario di partenza preferito (\${inputs.departureTimePreference}) se specificato.
 
-11. ALLOGGI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa.
+11. ALLOGGI E NOTTI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa. ATTENZIONE: La somma totale delle notti in hotel + le eventuali notti in volo (es. volo notturno) DEVE COINCIDERE ESATTAMENTE con il numero di notti del periodo specificato (${totalDays - 1} notti totali). Se si ipotizza di stare più notti nella stessa tappa, l'hotel/accommodation resta la stessa e indichi il numero di notti totale per quella tappa.
 
 12. COSTI: I costi di voli, treni e attività devono essere indicati PER PERSONA. Il costo degli hotel deve essere indicato PER CAMERA a notte. Il budget totale ("budgetBreakdown") deve tenere conto del numero di persone (${inputs.people.adults} adulti e ${inputs.people.children.length} bambini).
 
-13. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 10-15 parole). Sii telegrafico, vai dritto al punto. Non usare frasi lunghe.
+13. LUOGO ATTIVITÀ: Per ogni attività nell'itinerario, DEVI specificare il luogo esatto ("location") in cui si svolge (es. "Milano", "Roma", "Parigi").
+
+14. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 10-15 parole). Sii telegrafico, vai dritto al punto. Non usare frasi lunghe.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
@@ -170,6 +172,7 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
       "activities": [
         {
           "time": "09:00",
+          "location": "Milano",
           "name": "Nome Attività",
           "description": "Max 10 parole",
           "costEstimate": 25,

@@ -10,6 +10,7 @@ export const TravelInputsSchema = z.object({
   budget: z.number().min(100),
   departureCity: z.string().min(2),
   destination: z.string().min(2),
+  country: z.string().optional(),
   startDate: z.string(),
   endDate: z.string(),
   isPeriodFlexible: z.boolean(),
@@ -104,6 +105,7 @@ export const TravelPlanSchema = z.object({
   accommodations: z.array(
     z.object({
       stopName: z.string(),
+      nights: z.number().optional(),
       options: z.array(
         z.object({
           name: z.string(),

@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { generateTravelPlan, summarizeAccommodationReviews, type TravelInputs } from './services/travelService';
+import * as XLSX from 'xlsx';
+import { generateTravelPlan, summarizeAccommodationReviews, getDestinationCountries, type TravelInputs } from './services/travelService';
 import { TravelMap } from './components/TravelMap';
 import 'leaflet/dist/leaflet.css';
 
@@ -50,12 +51,13 @@ const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 };
 
 // Link sicuri: fallback a Google Search, mai 404
-const getSafeLink = (url: string | undefined, name: string): string => {
+const getSafeLink = (url: string | undefined, name: string, destination?: string): string => {
   if (url && typeof url === 'string' && url.startsWith('http')) {
     const trusted = ['wikipedia.org', 'tripadvisor', 'booking.com', 'expedia', 'viator', 'lonelyplanet', 'google.com', 'wikimedia'];
     if (trusted.some((t) => url.includes(t))) return url;
   }
-  return `https://www.google.com/search?q=${encodeURIComponent(name)}`;
+  const query = destination ? `${name} ${destination}` : name;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 };
 
 // ─── LOADING SCREEN ─────────────────────────────────────────────────────────
@@ -297,6 +299,8 @@ function AccommodationReviewer() {
 
 function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void }) {
   const [modifyText, setModifyText] = useState("");
+  const [selectedAccommodations, setSelectedAccommodations] = useState<Record<number, any>>({});
+  const [selectedFlight, setSelectedFlight] = useState<any>(null);
   const heroUrl = getImageUrl({ imageUrl: plan.destinationOverview?.heroImageUrl }, plan.destinationOverview?.title + ' landscape');
 
   // Costruisci mapPoints aggregando tutti i punti con coordinate valide
@@ -344,6 +348,106 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
     } catch (error) {
       console.error('Error saving HTML:', error);
       alert('Si è verificato un errore durante il salvataggio dell\'itinerario. Riprova.');
+    }
+  };
+
+  const totalActivitiesCost = (plan.itinerary || []).reduce((sum: number, day: any) => {
+    return sum + (day.activities || []).reduce((daySum: number, act: any) => {
+      return daySum + ((act.costEstimate || 0) * (inputs.people.adults + inputs.people.children.length));
+    }, 0);
+  }, 0);
+
+  const totalAccommodationsCost = Object.entries(selectedAccommodations).reduce((sum: number, [stopIndex, hotel]: [string, any]) => {
+    const nights = plan.accommodations[parseInt(stopIndex)]?.nights || 1;
+    return sum + (hotel.estimatedPricePerNight * nights);
+  }, 0);
+
+  const totalFlightCost = selectedFlight ? (selectedFlight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)) : 0;
+
+  const totalCost = totalActivitiesCost + totalAccommodationsCost + totalFlightCost;
+
+  const handleExportExcel = () => {
+    try {
+      const numPeople = inputs.people.adults + inputs.people.children.length;
+      const rows: any[] = [];
+
+      // Aggiungi le righe dell'itinerario
+      plan.itinerary?.forEach((day: any) => {
+        rows.push({
+          'Data / Ora': `Giorno ${day.day} - ${day.title}`,
+          'Attività': '',
+          'Durata': '',
+          'Costo Stimato': ''
+        });
+
+        day.activities?.forEach((act: any) => {
+          const actTotal = (act.costEstimate || 0) * numPeople;
+          rows.push({
+            'Data / Ora': act.time,
+            'Attività': act.name || act.description,
+            'Durata': act.duration || '-',
+            'Costo Stimato': act.costEstimate ? `€${actTotal} (€${act.costEstimate} x ${numPeople} pers.)` : 'Gratis / N.D.'
+          });
+        });
+      });
+
+      // Aggiungi il volo selezionato
+      if (selectedFlight) {
+        rows.push({
+          'Data / Ora': 'Volo Selezionato',
+          'Attività': `${selectedFlight.airline} (${selectedFlight.route})`,
+          'Durata': selectedFlight.duration || '-',
+          'Costo Stimato': `€${selectedFlight.estimatedPrice * numPeople} (€${selectedFlight.estimatedPrice} x ${numPeople} pers.)`
+        });
+      }
+
+      // Aggiungi gli alloggi selezionati
+      if (Object.keys(selectedAccommodations).length > 0) {
+        rows.push({
+          'Data / Ora': 'Alloggi Selezionati',
+          'Attività': '',
+          'Durata': '',
+          'Costo Stimato': ''
+        });
+
+        Object.entries(selectedAccommodations).forEach(([stopIndex, hotel]: [string, any]) => {
+          const nights = plan.accommodations[parseInt(stopIndex)]?.nights || 1;
+          rows.push({
+            'Data / Ora': '-',
+            'Attività': `${hotel.name} (${plan.accommodations[parseInt(stopIndex)]?.stopName})`,
+            'Durata': `${nights} ${nights === 1 ? 'notte' : 'notti'}`,
+            'Costo Stimato': `€${hotel.estimatedPricePerNight * nights} (€${hotel.estimatedPricePerNight}/notte)`
+          });
+        });
+      }
+
+      // Aggiungi il totale
+      rows.push({
+        'Data / Ora': '',
+        'Attività': '',
+        'Durata': 'Totale Stimato:',
+        'Costo Stimato': `€${totalCost}`
+      });
+
+      // Crea il foglio di lavoro e la cartella di lavoro
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Itinerario");
+
+      // Imposta la larghezza delle colonne
+      const wscols = [
+        { wch: 25 }, // Data / Ora
+        { wch: 50 }, // Attività
+        { wch: 15 }, // Durata
+        { wch: 25 }  // Costo Stimato
+      ];
+      worksheet['!cols'] = wscols;
+
+      // Salva il file
+      XLSX.writeFile(workbook, `itinerario-${plan.destinationOverview?.title?.toLowerCase().replace(/\s+/g, '-') || 'viaggio'}.xlsx`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Si è verificato un errore durante l\'esportazione in Excel. Riprova.');
     }
   };
 
@@ -606,7 +710,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                   {(day.activities || []).map((act: any, j: number) => (
                     <a
                       key={j}
-                      href={getSafeLink(act.sourceUrl, act.name || act.description)}
+                      href={getSafeLink(act.sourceUrl, act.name || act.description, plan.destinationOverview?.title || inputs?.destination)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="group bg-white rounded-3xl border border-brand-ink/5 p-6 hover:shadow-md transition-all block"
@@ -694,21 +798,26 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {(plan.flights || []).map((flight: any, i: number) => (
-              <a
+              <div
                 key={i}
-                href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="glass p-7 rounded-3xl hover:shadow-md transition-all group block"
+                className={cn("glass p-7 rounded-3xl hover:shadow-md transition-all group block relative",
+                  selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? "border-brand-accent ring-2 ring-brand-accent/20" : ""
+                )}
               >
+                {selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route && (
+                  <div className="absolute top-4 right-4 bg-brand-accent text-white p-1 rounded-full">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                )}
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <p className="font-bold text-xl">{flight.airline}</p>
                     <p className="text-brand-ink/50 text-sm mt-0.5">{flight.route}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-brand-accent">€{flight.estimatedPrice}</p>
-                    {flight.duration && <p className="text-xs text-brand-ink/40">{flight.duration}</p>}
+                    <p className="text-2xl font-bold text-brand-accent">€{flight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)}</p>
+                    <p className="text-xs text-brand-ink/40">€{flight.estimatedPrice} x {inputs.people.adults + inputs.people.children.length} pers.</p>
+                    {flight.duration && <p className="text-xs text-brand-ink/40 mt-1">{flight.duration}</p>}
                   </div>
                 </div>
                 {(flight.options || []).length > 0 && (
@@ -720,10 +829,25 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                     ))}
                   </ul>
                 )}
-                <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ExternalLink className="w-3 h-3" /> Cerca voli
+                <div className="mt-6 flex items-center justify-between pt-4 border-t border-brand-ink/5">
+                  <a 
+                    href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-xs font-bold uppercase tracking-widest text-brand-accent hover:underline flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Cerca voli
+                  </a>
+                  <button 
+                    onClick={() => setSelectedFlight(flight)}
+                    className={cn("text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full transition-colors",
+                      selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? "bg-brand-accent text-white" : "bg-brand-paper hover:bg-brand-ink/5"
+                    )}
+                  >
+                    {selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? 'Scelto' : 'Scegli'}
+                  </button>
                 </div>
-              </a>
+              </div>
             ))}
           </div>
         </section>
@@ -742,13 +866,17 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {(stop.options || []).map((hotel: any, j: number) => (
-                    <a
+                    <div
                       key={j}
-                      href={getSafeLink(hotel.bookingUrl, hotel.name + ' hotel')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group block bg-white rounded-3xl shadow-sm border border-brand-ink/5 p-6 hover:shadow-md transition-all duration-300"
+                      className={cn("group block bg-white rounded-3xl shadow-sm border p-6 hover:shadow-md transition-all duration-300 relative", 
+                        selectedAccommodations[i]?.name === hotel.name ? "border-brand-accent ring-2 ring-brand-accent/20" : "border-brand-ink/5"
+                      )}
                     >
+                      {selectedAccommodations[i]?.name === hotel.name && (
+                        <div className="absolute top-4 right-4 bg-brand-accent text-white p-1 rounded-full">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      )}
                       <div className="flex justify-between items-start mb-1">
                         <h4 className="text-lg font-serif leading-tight group-hover:text-brand-accent transition-colors pr-2">
                           {hotel.name}
@@ -779,10 +907,30 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                         </div>
                       )}
                       <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
-                        <span className="text-xs text-brand-ink/40">per notte</span>
-                        <span className="font-bold text-lg">€{hotel.estimatedPricePerNight}</span>
+                        <div>
+                          <span className="text-xs text-brand-ink/40 block">per notte</span>
+                          <span className="font-bold text-lg">€{hotel.estimatedPricePerNight}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <a 
+                            href={getSafeLink(hotel.bookingUrl, hotel.name + ' hotel')} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-xs font-bold uppercase tracking-widest text-brand-accent hover:underline flex items-center"
+                          >
+                            Vedi
+                          </a>
+                          <button 
+                            onClick={() => setSelectedAccommodations(prev => ({ ...prev, [i]: hotel }))}
+                            className={cn("text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full transition-colors",
+                              selectedAccommodations[i]?.name === hotel.name ? "bg-brand-accent text-white" : "bg-brand-paper hover:bg-brand-ink/5"
+                            )}
+                          >
+                            {selectedAccommodations[i]?.name === hotel.name ? 'Scelto' : 'Scegli'}
+                          </button>
+                        </div>
                       </div>
-                    </a>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -883,6 +1031,119 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                 )}
               </div>
             )}
+          </section>
+        )}
+
+        {/* TABELLA RIASSUNTIVA ITINERARIO */}
+        {plan.itinerary && plan.itinerary.length > 0 && (
+          <section className="mb-20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <h2 className="text-4xl flex items-center gap-3">
+                <Calendar className="w-7 h-7" /> Riassunto Itinerario
+              </h2>
+              <button
+                onClick={handleExportExcel}
+                className="inline-flex items-center justify-center gap-2 bg-green-50 text-green-600 px-6 py-3 rounded-full font-bold text-sm hover:bg-green-100 transition-colors print:hidden"
+              >
+                <Download className="w-4 h-4" /> Esporta in Excel
+              </button>
+            </div>
+            <div className="bg-white rounded-3xl shadow-sm border border-brand-ink/5 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-brand-paper/50 border-b border-brand-ink/5 text-[10px] uppercase tracking-widest text-brand-ink/40">
+                      <th className="p-4 font-bold whitespace-nowrap">Data / Ora</th>
+                      <th className="p-4 font-bold">Attività</th>
+                      <th className="p-4 font-bold whitespace-nowrap">Durata</th>
+                      <th className="p-4 font-bold whitespace-nowrap text-right">Costo Stimato</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {plan.itinerary.map((day: any, i: number) => (
+                      <React.Fragment key={i}>
+                        <tr className="bg-brand-paper/20">
+                          <td colSpan={4} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
+                            Giorno {day.day} - {day.title}
+                          </td>
+                        </tr>
+                        {day.activities?.map((act: any, j: number) => {
+                          const numPeople = inputs.people.adults + inputs.people.children.length;
+                          const actTotal = (act.costEstimate || 0) * numPeople;
+                          return (
+                            <tr key={`${i}-${j}`} className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
+                              <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">{act.time}</td>
+                              <td className="p-4 font-medium">{act.name || act.description}</td>
+                              <td className="p-4 text-brand-ink/60 whitespace-nowrap">{act.duration || '-'}</td>
+                              <td className="p-4 text-right font-medium whitespace-nowrap">
+                                {act.costEstimate ? (
+                                  <>
+                                    €{actTotal} <span className="text-xs text-brand-ink/40 font-normal">(€{act.costEstimate} x {numPeople} pers.)</span>
+                                  </>
+                                ) : 'Gratis / N.D.'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                    {selectedFlight && (
+                      <>
+                        <tr className="bg-brand-paper/20">
+                          <td colSpan={4} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
+                            Volo Selezionato
+                          </td>
+                        </tr>
+                        <tr className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
+                          <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">-</td>
+                          <td className="p-4 font-medium">
+                            {selectedFlight.airline} <span className="text-xs text-brand-ink/40 font-normal">({selectedFlight.route})</span>
+                          </td>
+                          <td className="p-4 text-brand-ink/60 whitespace-nowrap">{selectedFlight.duration || '-'}</td>
+                          <td className="p-4 text-right font-medium whitespace-nowrap">
+                            €{selectedFlight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)} <span className="text-xs text-brand-ink/40 font-normal">(€{selectedFlight.estimatedPrice} x {inputs.people.adults + inputs.people.children.length} pers.)</span>
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                    {Object.keys(selectedAccommodations).length > 0 && (
+                      <>
+                        <tr className="bg-brand-paper/20">
+                          <td colSpan={4} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
+                            Alloggi Selezionati
+                          </td>
+                        </tr>
+                        {Object.entries(selectedAccommodations).map(([stopIndex, hotel]: [string, any]) => {
+                          const nights = plan.accommodations[parseInt(stopIndex)]?.nights || 1;
+                          return (
+                            <tr key={`hotel-${stopIndex}`} className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
+                              <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">-</td>
+                              <td className="p-4 font-medium">
+                                {hotel.name} <span className="text-xs text-brand-ink/40 font-normal">({plan.accommodations[parseInt(stopIndex)]?.stopName})</span>
+                              </td>
+                              <td className="p-4 text-brand-ink/60 whitespace-nowrap">{nights} {nights === 1 ? 'notte' : 'notti'}</td>
+                              <td className="p-4 text-right font-medium whitespace-nowrap">
+                                €{hotel.estimatedPricePerNight * nights} <span className="text-xs text-brand-ink/40 font-normal">(€{hotel.estimatedPricePerNight}/notte)</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-brand-ink/5 border-t-2 border-brand-ink/10">
+                      <td colSpan={3} className="p-4 text-right font-serif font-bold text-lg">
+                        Totale Stimato:
+                      </td>
+                      <td className="p-4 text-right font-bold text-xl text-brand-accent whitespace-nowrap">
+                        €{totalCost}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
           </section>
         )}
 

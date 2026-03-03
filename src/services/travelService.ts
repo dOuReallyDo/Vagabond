@@ -119,9 +119,13 @@ Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, l
 
 9. METEO (CLIMA E VIAGGI): Per la sezione "weatherInfo", DEVI cercare su Google "clima e viaggi ${inputs.destination}" ed estrarre le informazioni ESATTE da quel sito per il mese del viaggio. Riassumi le temperature, il clima, i pro e i contro basandoti esclusivamente su quella fonte.
 
-10. VOLI (GOOGLE FLIGHTS): Genera opzioni di volo realistiche. Se è indicato uno stopover, crea un itinerario multitratta. Il link di prenotazione (\`bookingUrl\`) DEVE essere un link a Google Flights con i parametri corretti (es. https://www.google.com/travel/flights?q=Flights%20to%20${encodeURIComponent(inputs.destination)}%20from%20${encodeURIComponent(inputs.departureCity)}%20on%20${inputs.startDate}%20through%20${inputs.endDate}). Tieni conto dell'orario di partenza preferito (${inputs.departureTimePreference}) se specificato.
+10. VOLI (GOOGLE FLIGHTS): Genera opzioni di volo realistiche. Se è indicato uno stopover, crea un itinerario multitratta. Il link di prenotazione (\`bookingUrl\`) DEVE essere un link a Google Flights con i parametri corretti (es. https://www.google.com/travel/flights?q=Flights%20to%20\${encodeURIComponent(inputs.destination)}%20from%20\${encodeURIComponent(inputs.departureCity)}%20on%20\${inputs.startDate}%20through%20\${inputs.endDate}). Tieni conto dell'orario di partenza preferito (\${inputs.departureTimePreference}) se specificato.
 
-11. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 10-15 parole). Sii telegrafico, vai dritto al punto. Non usare frasi lunghe.
+11. ALLOGGI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa.
+
+12. COSTI: I costi di voli, treni e attività devono essere indicati PER PERSONA. Il costo degli hotel deve essere indicato PER CAMERA a notte. Il budget totale ("budgetBreakdown") deve tenere conto del numero di persone (${inputs.people.adults} adulti e ${inputs.people.children.length} bambini).
+
+13. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 10-15 parole). Sii telegrafico, vai dritto al punto. Non usare frasi lunghe.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
@@ -204,6 +208,7 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
   "accommodations": [
     {
       "stopName": "Nome città tappa",
+      "nights": 3,
       "options": [
         {
           "name": "Nome Hotel Reale",
@@ -302,6 +307,50 @@ Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
   } catch (error) {
     console.error("API call failed:", error);
     throw error;
+  }
+};
+
+export const getDestinationCountries = async (destination: string): Promise<string[]> => {
+  let apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    if (process.env.API_KEY && process.env.API_KEY.length > 20) {
+      apiKey = process.env.API_KEY;
+    }
+  }
+  if (!apiKey) {
+    throw new Error("API Key non trovata.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+In quale nazione si trova la destinazione "${destination}"?
+Se il nome corrisponde a più luoghi in nazioni diverse (es. "Boa Vista" può essere a Capo Verde o in Brasile), elenca TUTTE le nazioni possibili.
+Se corrisponde a una sola nazione, elenca solo quella.
+Se la destinazione è già una nazione (es. "Islanda"), restituisci il nome della nazione in italiano.
+
+Restituisci SOLO un array JSON di stringhe con i nomi delle nazioni in italiano. Esempio: ["Capo Verde", "Brasile"] oppure ["Francia"].
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        temperature: 0.1,
+        responseMimeType: "application/json",
+      },
+    });
+
+    const text = response.text || "";
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    return [];
+  } catch (e) {
+    console.error("Errore nel recupero delle nazioni:", e);
+    return [];
   }
 };
 

@@ -311,8 +311,44 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
     ...(plan.bestRestaurants || []).map((r: any) => ({ lat: r.lat, lng: r.lng, label: r.name, type: 'restaurant' })),
   ].filter((p: any) => p.lat && p.lng && p.lat !== 0 && p.lng !== 0 && !isNaN(p.lat) && !isNaN(p.lng));
 
+  const handleSaveItinerary = () => {
+    const element = document.getElementById('pdf-content');
+    if (!element) return;
+    
+    try {
+      // Clone the document to modify it for saving
+      const clone = document.documentElement.cloneNode(true) as HTMLElement;
+      
+      // Remove scripts to prevent React hydration issues when opening the static HTML
+      const scripts = clone.querySelectorAll('script');
+      scripts.forEach(s => s.remove());
+      
+      // Remove UI elements that shouldn't be in the saved file (like buttons)
+      const hiddenElements = clone.querySelectorAll('.print\\:hidden');
+      hiddenElements.forEach(e => e.remove());
+
+      // Get the full HTML string
+      const htmlContent = "<!DOCTYPE html>\n" + clone.outerHTML;
+      
+      // Create a Blob and trigger download
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `itinerario-${plan.destinationOverview?.title?.toLowerCase().replace(/\s+/g, '-') || 'viaggio'}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error saving HTML:', error);
+      alert('Si è verificato un errore durante il salvataggio dell\'itinerario. Riprova.');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-brand-paper pb-24">
+    <div className="min-h-screen bg-brand-paper pb-24" id="pdf-content">
       {/* HERO */}
       <section className="relative h-[85vh] print:h-auto print:min-h-[300px] overflow-hidden">
         <img
@@ -332,10 +368,10 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
             <ArrowRight className="rotate-180 w-4 h-4" /> Nuova ricerca
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={handleSaveItinerary}
             className="bg-brand-accent text-white px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-brand-accent/90 transition-colors shadow-md"
           >
-            <Download className="w-4 h-4" /> Salva PDF
+            <Download className="w-4 h-4" /> Salva Itinerario
           </button>
         </div>
 
@@ -430,7 +466,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                 </div>
               </div>
               <a 
-                href={`https://www.google.com/search?q=site:climaeviaggi.it+${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}`}
+                href={`https://www.google.com/search?q=site:climaeviaggi.it+${encodeURIComponent(plan.destinationOverview?.country || inputs?.destination || plan.destinationOverview?.title || '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-600 bg-amber-50 px-4 py-2 rounded-full hover:bg-amber-100 transition-colors"
@@ -467,7 +503,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                 <h2 className="text-3xl">Sicurezza</h2>
               </div>
               <a 
-                href={`https://www.google.com/search?q=site:viaggiaresicuri.it+${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}`}
+                href={`https://www.google.com/search?q=site:viaggiaresicuri.it+${encodeURIComponent(plan.destinationOverview?.country || inputs?.destination || plan.destinationOverview?.title || '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full hover:bg-emerald-100 transition-colors"
@@ -920,6 +956,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
 // ─── FORM VIEW ────────────────────────────────────────────────────────────────
 
 function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean }) {
+  const [bgSeed] = useState(() => Math.floor(Math.random() * 1000));
   const [inputs, setInputs] = useState<TravelInputs & { budgetInput: string }>({
     people: { adults: 2, children: [] },
     budget: 2000,
@@ -957,7 +994,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
       {/* Left Side - Image & Branding */}
       <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col justify-end p-8 md:p-16 overflow-hidden">
         <img 
-          src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop" 
+          src={`https://loremflickr.com/1080/1920/travel,landscape/all?lock=${bgSeed}`} 
           alt="Travel Inspiration" 
           className="absolute inset-0 w-full h-full object-cover"
         />
@@ -965,7 +1002,9 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
         <div className="absolute inset-0 bg-brand-ink/10" />
         
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10">
-          <h1 className="text-7xl md:text-8xl xl:text-9xl mb-4 text-white leading-none drop-shadow-lg">Vagabond</h1>
+          <h1 className="text-5xl md:text-7xl xl:text-8xl mb-4 text-white leading-none drop-shadow-lg font-bold tracking-tight">
+            Vagabond
+          </h1>
           <p className="text-lg md:text-xl font-serif italic text-white/90 max-w-md drop-shadow-md">
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>

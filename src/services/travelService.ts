@@ -128,6 +128,7 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
   "budgetWarning": null,
   "destinationOverview": {
     "title": "Nome Destinazione",
+    "country": "SOLO il nome della nazione in italiano (es. Francia, Giappone). NON inserire la città.",
     "tagline": "Frase ispirazionale breve",
     "description": "Descrizione evocativa 2-3 frasi",
     "heroImageUrl": "URL immagine reale",

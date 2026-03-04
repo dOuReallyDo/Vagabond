@@ -184,7 +184,7 @@ function Badge({ children, color = 'default' }: { children: React.ReactNode; col
   );
 }
 
-function AccommodationReviewer() {
+function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
   const [loading, setLoading] = useState(false);
@@ -203,6 +203,27 @@ function AccommodationReviewer() {
       setError(err.message || "Errore durante la ricerca delle recensioni.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdd = () => {
+    if (onAdd && result) {
+      onAdd({
+        name: name,
+        type: "Hotel",
+        stars: 4,
+        rating: 8.5,
+        reviewSummary: result.summary,
+        pros: result.pros,
+        cons: result.cons,
+        estimatedPricePerNight: 100,
+        bookingUrl: `https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(city)}`,
+        address: city,
+        amenities: []
+      });
+      setResult(null);
+      setName('');
+      setCity('');
     }
   };
 
@@ -268,26 +289,36 @@ function AccommodationReviewer() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-brand-ink/5 pt-4">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-ink/40 mb-3">Cerca su</h4>
-            <div className="flex flex-wrap gap-3">
-              <a
-                href={`https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
-              >
-                Booking.com <ExternalLink className="w-3 h-3" />
-              </a>
-              <a
-                href={`https://www.google.com/search?q=tripadvisor+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
-              >
-                TripAdvisor <ExternalLink className="w-3 h-3" />
-              </a>
+          <div className="border-t border-brand-ink/5 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-brand-ink/40 mb-3">Cerca su</h4>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href={`https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
+                >
+                  Booking.com <ExternalLink className="w-3 h-3" />
+                </a>
+                <a
+                  href={`https://www.google.com/search?q=tripadvisor+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
+                >
+                  TripAdvisor <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             </div>
+            {onAdd && (
+              <button
+                onClick={handleAdd}
+                className="bg-brand-accent text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-brand-accent/90 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Aggiungi agli alloggi
+              </button>
+            )}
           </div>
         </motion.div>
       )}
@@ -300,8 +331,20 @@ function AccommodationReviewer() {
 function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void }) {
   const [modifyText, setModifyText] = useState("");
   const [selectedAccommodations, setSelectedAccommodations] = useState<Record<number, any>>({});
+  const [accommodationNights, setAccommodationNights] = useState<Record<number, number>>({});
   const [selectedFlight, setSelectedFlight] = useState<any>(null);
   const heroUrl = getImageUrl({ imageUrl: plan.destinationOverview?.heroImageUrl }, plan.destinationOverview?.title + ' landscape');
+
+  // Inizializza le notti con i valori suggeriti dal piano
+  useEffect(() => {
+    if (plan?.accommodations) {
+      const initialNights: Record<number, number> = {};
+      plan.accommodations.forEach((stop: any, i: number) => {
+        initialNights[i] = stop.nights || 1;
+      });
+      setAccommodationNights(initialNights);
+    }
+  }, [plan]);
 
   // Costruisci mapPoints aggregando tutti i punti con coordinate valide
   const allMapPoints = [
@@ -358,7 +401,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
   }, 0);
 
   const totalAccommodationsCost = Object.entries(selectedAccommodations).reduce((sum: number, [stopIndex, hotel]: [string, any]) => {
-    const nights = plan.accommodations[parseInt(stopIndex)]?.nights || 1;
+    const nights = accommodationNights[parseInt(stopIndex)] || 1;
     return sum + (hotel.estimatedPricePerNight * nights);
   }, 0);
 
@@ -378,7 +421,8 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
           'Luogo': '',
           'Attività': '',
           'Durata': '',
-          'Costo Stimato': ''
+          'Costo Stimato': '',
+          'Note Costo': ''
         });
 
         day.activities?.forEach((act: any) => {
@@ -388,7 +432,8 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
             'Luogo': act.location || '-',
             'Attività': act.name || act.description,
             'Durata': act.duration || '-',
-            'Costo Stimato': act.costEstimate ? `€${actTotal} (€${act.costEstimate} x ${numPeople} pers.)` : 'Gratis / N.D.'
+            'Costo Stimato': act.costEstimate ? actTotal : 0,
+            'Note Costo': act.costEstimate ? `€${act.costEstimate} x ${numPeople} pers.` : 'Gratis / N.D.'
           });
         });
       });
@@ -400,7 +445,8 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
           'Luogo': '-',
           'Attività': `${selectedFlight.airline} (${selectedFlight.route})`,
           'Durata': selectedFlight.duration || '-',
-          'Costo Stimato': `€${selectedFlight.estimatedPrice * numPeople} (€${selectedFlight.estimatedPrice} x ${numPeople} pers.)`
+          'Costo Stimato': selectedFlight.estimatedPrice * numPeople,
+          'Note Costo': `€${selectedFlight.estimatedPrice} x ${numPeople} pers.`
         });
       }
 
@@ -411,17 +457,19 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
           'Luogo': '',
           'Attività': '',
           'Durata': '',
-          'Costo Stimato': ''
+          'Costo Stimato': '',
+          'Note Costo': ''
         });
 
         Object.entries(selectedAccommodations).forEach(([stopIndex, hotel]: [string, any]) => {
-          const nights = plan.accommodations[parseInt(stopIndex)]?.nights || 1;
+          const nights = accommodationNights[parseInt(stopIndex)] || 1;
           rows.push({
             'Data / Ora': '-',
             'Luogo': plan.accommodations[parseInt(stopIndex)]?.stopName || '-',
             'Attività': hotel.name,
             'Durata': `${nights} ${nights === 1 ? 'notte' : 'notti'}`,
-            'Costo Stimato': `€${hotel.estimatedPricePerNight * nights} (€${hotel.estimatedPricePerNight}/notte)`
+            'Costo Stimato': hotel.estimatedPricePerNight * nights,
+            'Note Costo': `€${hotel.estimatedPricePerNight}/notte`
           });
         });
       }
@@ -432,7 +480,8 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
         'Luogo': '',
         'Attività': '',
         'Durata': 'Totale Stimato:',
-        'Costo Stimato': `€${totalCost}`
+        'Costo Stimato': totalCost,
+        'Note Costo': ''
       });
 
       // Crea il foglio di lavoro e la cartella di lavoro
@@ -446,7 +495,8 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
         { wch: 20 }, // Luogo
         { wch: 50 }, // Attività
         { wch: 15 }, // Durata
-        { wch: 25 }  // Costo Stimato
+        { wch: 15 }, // Costo Stimato
+        { wch: 25 }  // Note Costo
       ];
       worksheet['!cols'] = wscols;
 
@@ -714,10 +764,12 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {(day.activities || []).map((act: any, j: number) => (
+                  {(day.activities || []).map((act: any, j: number) => {
+                    const searchDestination = act.location || plan.destinationOverview?.title || inputs?.destination;
+                    return (
                     <a
                       key={j}
-                      href={getSafeLink(act.sourceUrl, act.name || act.description, plan.destinationOverview?.title || inputs?.destination)}
+                      href={getSafeLink(act.sourceUrl, act.name || act.description, searchDestination)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="group bg-white rounded-3xl border border-brand-ink/5 p-6 hover:shadow-md transition-all block"
@@ -738,6 +790,11 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                         )}
                       </div>
                       {act.name && <h4 className="text-lg font-serif mb-2 leading-tight group-hover:text-brand-accent transition-colors">{act.name}</h4>}
+                      {act.location && (
+                        <p className="text-xs text-brand-accent mb-2 flex items-center gap-1 font-medium">
+                          <MapPin className="w-3 h-3" /> {act.location}
+                        </p>
+                      )}
                       <p className="text-brand-ink/70 text-sm leading-relaxed">{act.description}</p>
                       
                       {(act.transport || act.travelTime) && (
@@ -765,7 +822,8 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                         <ExternalLink className="w-3 h-3" /> Verifica sul web
                       </div>
                     </a>
-                  ))}
+                    );
+                  })}
                 </div>
               </motion.div>
             ))}
@@ -868,9 +926,27 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
           <div className="space-y-14">
             {(plan.accommodations || []).map((stop: any, i: number) => (
               <div key={i}>
-                <h3 className="text-2xl mb-6 text-brand-accent italic flex items-center gap-2">
-                  <MapPin className="w-5 h-5" /> {stop.stopName}
-                </h3>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                  <h3 className="text-2xl text-brand-accent italic flex items-center gap-2">
+                    <MapPin className="w-5 h-5" /> {stop.stopName}
+                  </h3>
+                  <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-full shadow-sm border border-brand-ink/5">
+                    <span className="text-sm font-bold text-brand-ink/60">Notti:</span>
+                    <button 
+                      onClick={() => setAccommodationNights(prev => ({ ...prev, [i]: Math.max(1, (prev[i] || 1) - 1) }))}
+                      className="w-6 h-6 rounded-full bg-brand-paper flex items-center justify-center hover:bg-brand-ink/10 transition-colors"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <span className="font-bold w-4 text-center">{accommodationNights[i] || 1}</span>
+                    <button 
+                      onClick={() => setAccommodationNights(prev => ({ ...prev, [i]: (prev[i] || 1) + 1 }))}
+                      className="w-6 h-6 rounded-full bg-brand-paper flex items-center justify-center hover:bg-brand-ink/10 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {(stop.options || []).map((hotel: any, j: number) => (
                     <div
@@ -943,7 +1019,32 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
               </div>
             ))}
           </div>
-          <AccommodationReviewer />
+          <AccommodationReviewer onAdd={(hotel) => {
+            // Trova la tappa corretta in base alla città
+            const stopIndex = plan.accommodations.findIndex((stop: any) => 
+              stop.stopName.toLowerCase().includes(hotel.address.toLowerCase()) || 
+              hotel.address.toLowerCase().includes(stop.stopName.toLowerCase())
+            );
+            
+            if (stopIndex !== -1) {
+              // Aggiungi l'hotel alle opzioni di quella tappa
+              const updatedPlan = { ...plan };
+              updatedPlan.accommodations[stopIndex].options.push(hotel);
+              // Seleziona automaticamente l'hotel appena aggiunto
+              setSelectedAccommodations(prev => ({ ...prev, [stopIndex]: hotel }));
+              alert(`Alloggio aggiunto e selezionato per la tappa: ${plan.accommodations[stopIndex].stopName}`);
+            } else {
+              // Se non trova una corrispondenza esatta, lo aggiunge alla prima tappa
+              const updatedPlan = { ...plan };
+              if (updatedPlan.accommodations && updatedPlan.accommodations.length > 0) {
+                updatedPlan.accommodations[0].options.push(hotel);
+                setSelectedAccommodations(prev => ({ ...prev, [0]: hotel }));
+                alert(`Alloggio aggiunto e selezionato per la tappa: ${plan.accommodations[0].stopName} (Città non trovata esattamente)`);
+              } else {
+                alert("Nessuna tappa trovata nell'itinerario per aggiungere l'alloggio.");
+              }
+            }
+          }} />
         </section>
 
         {/* RISTORANTI */}
@@ -1124,7 +1225,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                           </td>
                         </tr>
                         {Object.entries(selectedAccommodations).map(([stopIndex, hotel]: [string, any]) => {
-                          const nights = plan.accommodations[parseInt(stopIndex)]?.nights || 1;
+                          const nights = accommodationNights[parseInt(stopIndex)] || 1;
                           return (
                             <tr key={`hotel-${stopIndex}`} className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
                               <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">-</td>

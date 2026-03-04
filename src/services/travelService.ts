@@ -99,7 +99,7 @@ REGOLE ASSOLUTE:
 2. LINK: Usa SOLO URL affidabili e reali.
 3. COORDINATE E MAPPA: Ogni luogo DEVE avere lat/lng precise. Nel campo \`mapPoints\`, DEVI includere obbligatoriamente anche la città di partenza (${inputs.departureCity}) e la destinazione principale (${inputs.destination}).
 4. COSTI: Realistici. Totale non superiore a €${inputs.budget}.
-5. HOTEL E RISTORANTI REALI: Solo strutture che esistono davvero con nomi precisi. Fornisci 2 opzioni di alloggio per OGNI tappa e 2 opzioni per i ristoranti.
+5. HOTEL E RISTORANTI REALI: Solo strutture che esistono davvero con nomi precisi. Fornisci 2 opzioni di alloggio per OGNI tappa e ALMENO 2 opzioni per i ristoranti per OGNI tappa.
 6. ITALIANO CORRETTO: Grammatica italiana perfetta.
 7. VELOCITÀ: Sii conciso nelle descrizioni.
 
@@ -127,7 +127,13 @@ Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, l
 
 13. LUOGO ATTIVITÀ: Per ogni attività nell'itinerario, DEVI specificare il luogo esatto ("location") in cui si svolge (es. "Milano", "Roma", "Parigi").
 
-14. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 10-15 parole). Sii telegrafico, vai dritto al punto. Non usare frasi lunghe.
+14. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens):
+- Mantieni TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 5-10 parole). Sii telegrafico, vai dritto al punto.
+- Limita le "attractions" in "destinationOverview" a massimo 3.
+- Limita i "travelBlogs" a massimo 2.
+- Limita i "localTips" a massimo 3.
+- Ometti i campi "sourceUrl", "imageUrl", "lat" e "lng" per le attività dell'itinerario (l'app farà un fallback automatico a Google Search e non usa le coordinate delle attività).
+- Se il viaggio supera i 7 giorni: riduci le attività giornaliere a 3 (mattina, pomeriggio, sera) accorpando i pasti; ometti i ristoranti dall'itinerario giornaliero; ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel. Sii estremamente telegrafico.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
@@ -174,11 +180,8 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
           "time": "09:00",
           "location": "Milano",
           "name": "Nome Attività",
-          "description": "Max 10 parole",
+          "description": "Max 5 parole",
           "costEstimate": 25,
-          "sourceUrl": "URL affidabile",
-          "lat": 0.0000,
-          "lng": 0.0000,
           "duration": "2 ore",
           "transport": "Metro Linea 1",
           "travelTime": "15 min",
@@ -231,16 +234,21 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
   ],
   "bestRestaurants": [
     {
-      "name": "Nome Ristorante Reale",
-      "cuisineType": "Cucina locale",
-      "rating": 9.0,
-      "reviewSummary": "Max 10 parole",
-      "sourceUrl": "URL reale",
-      "priceRange": "€€",
-      "address": "Indirizzo reale",
-      "mustTry": "Piatto da non perdere",
-      "lat": 0.0000,
-      "lng": 0.0000
+      "stopName": "Nome città tappa",
+      "options": [
+        {
+          "name": "Nome Ristorante Reale",
+          "cuisineType": "Cucina locale",
+          "rating": 9.0,
+          "reviewSummary": "Max 10 parole",
+          "sourceUrl": "URL reale",
+          "priceRange": "€€",
+          "address": "Indirizzo reale",
+          "mustTry": "Piatto da non perdere",
+          "lat": 0.0000,
+          "lng": 0.0000
+        }
+      ]
     }
   ],
   "mapPoints": [
@@ -271,6 +279,7 @@ L'utente ha richiesto le seguenti modifiche o aggiunte:
 "${inputs.modificationRequest}"
 
 Aggiorna il piano di viaggio tenendo conto di queste richieste. Mantieni la stessa struttura JSON esatta e le stesse REGOLE ASSOLUTE.
+CRITICO: Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni ESTREMAMENTE SINTETICHE (massimo 5-10 parole). Ometti i campi "sourceUrl", "imageUrl", "lat" e "lng" per le attività dell'itinerario. Se il viaggio supera i 7 giorni, riduci le attività giornaliere a 3 (mattina, pomeriggio, sera) e ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel.
 Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
 `;
     }
@@ -278,7 +287,7 @@ Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
     onProgress?.(inputs.modificationRequest ? "Aggiorno l'itinerario..." : "Costruisco l'itinerario personalizzato...");
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: prompt + "\n\nRicorda: SOLO JSON valido, nessun testo extra, nessun blocco markdown.",
       config: {
         temperature: 0.3,

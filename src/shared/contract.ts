@@ -127,17 +127,22 @@ export const TravelPlanSchema = z.object({
   ).optional(),
   bestRestaurants: z.array(
     z.object({
-      name: z.string(),
-      cuisineType: z.string(),
-      rating: z.number().optional(),
-      reviewSummary: z.string(),
-      sourceUrl: z.string().optional(),
-      priceRange: z.string(),
-      imageUrl: z.string().optional(),
-      lat: z.number().optional(),
-      lng: z.number().optional(),
-      address: z.string().optional(),
-      mustTry: z.string().optional(),
+      stopName: z.string(),
+      options: z.array(
+        z.object({
+          name: z.string(),
+          cuisineType: z.string(),
+          rating: z.number().optional(),
+          reviewSummary: z.string(),
+          sourceUrl: z.string().optional(),
+          priceRange: z.string(),
+          imageUrl: z.string().optional(),
+          lat: z.number().optional(),
+          lng: z.number().optional(),
+          address: z.string().optional(),
+          mustTry: z.string().optional(),
+        })
+      )
     })
   ).optional(),
   mapPoints: z.array(

@@ -355,7 +355,9 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
     ...(plan.accommodations || []).flatMap((s: any) =>
       (s.options || []).map((h: any) => ({ lat: h.lat, lng: h.lng, label: h.name, type: 'hotel' }))
     ),
-    ...(plan.bestRestaurants || []).map((r: any) => ({ lat: r.lat, lng: r.lng, label: r.name, type: 'restaurant' })),
+    ...(plan.bestRestaurants || []).flatMap((s: any) =>
+      (s.options || [s]).map((r: any) => ({ lat: r.lat, lng: r.lng, label: r.name, type: 'restaurant' }))
+    ),
   ].filter((p: any) => p.lat && p.lng && p.lat !== 0 && p.lng !== 0 && !isNaN(p.lat) && !isNaN(p.lng));
 
   const handleSaveItinerary = () => {
@@ -1054,37 +1056,46 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
               <Utensils className="w-7 h-7" /> Dove mangiare
             </h2>
             <p className="text-brand-ink/50 mb-10 font-sans text-sm">Ristoranti locali autentici, selezionati per qualità e genuinità</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {plan.bestRestaurants.map((rest: any, i: number) => (
-                <a
-                  key={i}
-                  href={getSafeLink(rest.sourceUrl, rest.name + ' ristorante')}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group block bg-white rounded-3xl shadow-sm border border-brand-ink/5 p-6 hover:shadow-md transition-all duration-300"
-                >
-                  <h4 className="text-lg font-serif mb-0.5 group-hover:text-brand-accent transition-colors">{rest.name}</h4>
-                  <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{rest.cuisineType}</p>
-                  {rest.rating && <StarRating value={rest.rating} />}
-                  {rest.address && (
-                    <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
-                      <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {rest.address}
-                    </p>
-                  )}
-                  <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
-                    "{rest.reviewSummary}"
-                  </p>
-                  {rest.mustTry && (
-                    <div className="mt-3 bg-orange-50 p-3 rounded-xl">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-0.5">Da provare</p>
-                      <p className="text-xs text-orange-800">{rest.mustTry}</p>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
-                    <span className="text-xs text-brand-ink/40">Fascia di prezzo</span>
-                    <span className="font-bold">{rest.priceRange}</span>
+            <div className="space-y-14">
+              {plan.bestRestaurants.map((stop: any, i: number) => (
+                <div key={i}>
+                  <h3 className="text-2xl mb-6 text-brand-accent italic flex items-center gap-2">
+                    <MapPin className="w-5 h-5" /> {stop.stopName || stop.name}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {(stop.options || [stop]).map((rest: any, j: number) => (
+                      <a
+                        key={j}
+                        href={getSafeLink(rest.sourceUrl, rest.name + ' ristorante')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group block bg-white rounded-3xl shadow-sm border border-brand-ink/5 p-6 hover:shadow-md transition-all duration-300"
+                      >
+                        <h4 className="text-lg font-serif mb-0.5 group-hover:text-brand-accent transition-colors">{rest.name}</h4>
+                        <p className="text-[10px] text-brand-ink/40 uppercase tracking-widest mb-3">{rest.cuisineType}</p>
+                        {rest.rating && <StarRating value={rest.rating} />}
+                        {rest.address && (
+                          <p className="text-xs text-brand-ink/40 mt-2 flex items-start gap-1">
+                            <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {rest.address}
+                          </p>
+                        )}
+                        <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
+                          "{rest.reviewSummary}"
+                        </p>
+                        {rest.mustTry && (
+                          <div className="mt-3 bg-orange-50 p-3 rounded-xl">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-0.5">Da provare</p>
+                            <p className="text-xs text-orange-800">{rest.mustTry}</p>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-4 mt-4 border-t border-brand-ink/5">
+                          <span className="text-xs text-brand-ink/40">Fascia di prezzo</span>
+                          <span className="font-bold">{rest.priceRange}</span>
+                        </div>
+                      </a>
+                    ))}
                   </div>
-                </a>
+                </div>
               ))}
             </div>
           </section>

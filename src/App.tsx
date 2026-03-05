@@ -867,52 +867,125 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
             {(plan.flights || []).map((flight: any, i: number) => (
               <div
                 key={i}
-                className={cn("glass p-7 rounded-3xl hover:shadow-md transition-all group block relative",
-                  selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? "border-brand-accent ring-2 ring-brand-accent/20" : ""
+                className={cn("glass p-7 rounded-3xl hover:shadow-md transition-all group block relative border-2",
+                  selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? "border-brand-accent ring-4 ring-brand-accent/10" : "border-transparent"
                 )}
               >
+                {flight.type && (
+                  <div className="absolute -top-3 left-6 bg-brand-ink text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-sm">
+                    {flight.type}
+                  </div>
+                )}
+                
                 {selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route && (
-                  <div className="absolute top-4 right-4 bg-brand-accent text-white p-1 rounded-full">
+                  <div className="absolute top-4 right-4 bg-brand-accent text-white p-1 rounded-full z-10">
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                 )}
-                <div className="flex justify-between items-start mb-4">
+
+                <div className="flex justify-between items-start mb-6">
                   <div>
-                    <p className="font-bold text-xl">{flight.airline}</p>
-                    <p className="text-brand-ink/50 text-sm mt-0.5">{flight.route}</p>
+                    <p className="font-bold text-xl text-brand-ink">{flight.airline}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-brand-ink/40 text-xs font-mono uppercase tracking-wider">{flight.route.split('->')[0].trim()}</span>
+                      <div className="h-[1px] w-8 bg-brand-ink/10 relative">
+                        <Plane className="w-2 h-2 absolute -top-1 left-1/2 -translate-x-1/2 text-brand-ink/20" />
+                      </div>
+                      <span className="text-brand-ink/40 text-xs font-mono uppercase tracking-wider">{flight.route.split('->')[1]?.trim()}</span>
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold text-brand-accent">€{flight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)}</p>
-                    <p className="text-xs text-brand-ink/40">€{flight.estimatedPrice} x {inputs.people.adults + inputs.people.children.length} pers.</p>
-                    {flight.duration && <p className="text-xs text-brand-ink/40 mt-1">{flight.duration}</p>}
+                    <p className="text-[10px] text-brand-ink/40 font-bold uppercase tracking-tighter">Totale per {inputs.people.adults + inputs.people.children.length} pers.</p>
                   </div>
                 </div>
+
+                <div className="space-y-4 py-4 border-y border-brand-ink/5 mb-4">
+                  {/* Outbound */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-blue-50 rounded-lg">
+                        <Plane className="w-3 h-3 text-blue-600" />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">Andata</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Partenza</p>
+                        <p className="text-sm font-bold text-brand-ink">{flight.departureTime || '--:--'}</p>
+                      </div>
+                      <div className="text-center px-3 border-x border-brand-ink/5">
+                        <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Durata</p>
+                        <p className="text-[10px] font-medium text-brand-ink/70">{flight.duration || '-'}</p>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Arrivo</p>
+                        <p className="text-sm font-bold text-brand-ink">{flight.arrivalTime || '--:--'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Return */}
+                  {(flight.returnDepartureTime || flight.returnArrivalTime) && (
+                    <div className="flex items-center justify-between pt-4 border-t border-brand-ink/5">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-orange-50 rounded-lg">
+                          <Plane className="w-3 h-3 text-orange-600 rotate-180" />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">Ritorno</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Partenza</p>
+                          <p className="text-sm font-bold text-brand-ink">{flight.returnDepartureTime || '--:--'}</p>
+                        </div>
+                        <div className="text-center px-3 border-x border-brand-ink/5">
+                          <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Durata</p>
+                          <p className="text-[10px] font-medium text-brand-ink/70">{flight.returnDuration || '-'}</p>
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Arrivo</p>
+                          <p className="text-sm font-bold text-brand-ink">{flight.returnArrivalTime || '--:--'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {(flight.options || []).length > 0 && (
-                  <ul className="space-y-1.5 mt-4 pt-4 border-t border-brand-ink/5">
+                  <ul className="space-y-1.5 mb-6">
                     {flight.options.map((opt: string, j: number) => (
-                      <li key={j} className="text-sm text-brand-ink/60 flex items-center gap-2">
-                        <ChevronRight className="w-3 h-3 text-brand-accent shrink-0" /> {opt}
+                      <li key={j} className="text-xs text-brand-ink/60 flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-brand-accent/40 shrink-0" /> {opt}
                       </li>
                     ))}
                   </ul>
                 )}
-                <div className="mt-6 flex items-center justify-between pt-4 border-t border-brand-ink/5">
+
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setSelectedFlight(flight)}
+                    className={cn("flex-1 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2",
+                      selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route 
+                        ? "bg-brand-accent text-white shadow-lg shadow-brand-accent/20" 
+                        : "bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5"
+                    )}
+                  >
+                    {selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? (
+                      <><CheckCircle2 className="w-4 h-4" /> Volo Selezionato</>
+                    ) : (
+                      'Seleziona questo volo'
+                    )}
+                  </button>
                   <a 
                     href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)} 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    className="text-xs font-bold uppercase tracking-widest text-brand-accent hover:underline flex items-center gap-1.5"
+                    className="p-3 rounded-2xl bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5 transition-colors"
+                    title="Vedi su Google Flights"
                   >
-                    <ExternalLink className="w-3 h-3" /> Cerca voli
+                    <ExternalLink className="w-4 h-4" />
                   </a>
-                  <button 
-                    onClick={() => setSelectedFlight(flight)}
-                    className={cn("text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full transition-colors",
-                      selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? "bg-brand-accent text-white" : "bg-brand-paper hover:bg-brand-ink/5"
-                    )}
-                  >
-                    {selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? 'Scelto' : 'Scegli'}
-                  </button>
                 </div>
               </div>
             ))}
@@ -1351,6 +1424,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
     endDate: '',
     isPeriodFlexible: false,
     accommodationType: 'Hotel di charme',
+    flightPreference: 'Equilibrato',
     notes: '',
   });
 
@@ -1592,6 +1666,22 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                     <option>B&B locali</option>
                     <option>Appartamenti o ville</option>
                     <option>Esperienze uniche (glamping, ryokan…)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    <Plane className="w-3 h-3" /> Preferenza Voli
+                  </label>
+                  <select
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
+                    value={inputs.flightPreference}
+                    onChange={(e) => setInputs((p) => ({ ...p, flightPreference: e.target.value }))}
+                  >
+                    <option>Equilibrato</option>
+                    <option>Costo più basso</option>
+                    <option>Durata minore (più veloci)</option>
+                    <option>Solo voli diretti</option>
                   </select>
                 </div>
               </div>

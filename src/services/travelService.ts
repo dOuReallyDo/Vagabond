@@ -115,15 +115,15 @@ Per ogni giorno, DEVI pianificare dettagliatamente:
 - Cosa fare il pomeriggio
 - Dove cenare
 - Cosa fare la sera
-Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, la durata, i mezzi di trasporto e i tempi di percorrenza. Includi attività principali turistiche e non turistiche a seconda di quanto richiesto nelle note.
+Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, la durata, i mezzi di trasporto e i tempi di percorrenza. Includi attività principali turistiche e non turistiche a seconda di quanto richiesto nelle note. Se l'attività è un volo (es. volo di andata o ritorno), imposta costEstimate: 0.
 
 9. METEO (CLIMA E VIAGGI): Per la sezione "weatherInfo", DEVI cercare su Google "clima e viaggi ${inputs.destination}" ed estrarre le informazioni ESATTE da quel sito per il mese del viaggio. Riassumi le temperature, il clima, i pro e i contro basandoti esclusivamente su quella fonte.
 
-10. VOLI (GOOGLE FLIGHTS): Genera opzioni di volo realistiche. Se è indicato uno stopover, crea un itinerario multitratta. Il link di prenotazione (\`bookingUrl\`) DEVE essere un link a Google Flights con i parametri corretti (es. https://www.google.com/travel/flights?q=Flights%20to%20\${encodeURIComponent(inputs.destination)}%20from%20\${encodeURIComponent(inputs.departureCity)}%20on%20\${inputs.startDate}%20through%20\${inputs.endDate}). Tieni conto dell'orario di partenza preferito (\${inputs.departureTimePreference}) se specificato.
+10. VOLI (GOOGLE FLIGHTS): Genera almeno 2 opzioni di volo realistiche. Tieni conto della preferenza dell'utente: "${inputs.flightPreference}". Per ogni volo DEVI specificare: compagnia, rotta, prezzo stimato, orario di partenza/arrivo/durata per l'ANDATA e orario di partenza/arrivo/durata per il RITORNO, e un tag "type" (es. "Più economico", "Più veloce", "Consigliato"). Il link di prenotazione (\`bookingUrl\`) DEVE essere un link a Google Flights con i parametri corretti. Tieni conto dell'orario di partenza preferito (${inputs.departureTimePreference}) se specificato.
 
 11. ALLOGGI E NOTTI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa. ATTENZIONE: La somma totale delle notti in hotel + le eventuali notti in volo (es. volo notturno) DEVE COINCIDERE ESATTAMENTE con il numero di notti del periodo specificato (${totalDays - 1} notti totali). Se si ipotizza di stare più notti nella stessa tappa, l'hotel/accommodation resta la stessa e indichi il numero di notti totale per quella tappa.
 
-12. COSTI: I costi di voli, treni e attività devono essere indicati PER PERSONA. Il costo degli hotel deve essere indicato PER CAMERA a notte. Il budget totale ("budgetBreakdown") deve tenere conto del numero di persone (${inputs.people.adults} adulti e ${inputs.people.children.length} bambini).
+12. COSTI: I costi di voli, treni e attività devono essere indicati PER PERSONA. Il costo degli hotel deve essere indicato PER CAMERA a notte. Il budget totale ("budgetBreakdown") deve tenere conto del numero di persone (${inputs.people.adults} adulti e ${inputs.people.children.length} bambini). IMPORTANTE: Se inserisci il volo come attività nell'itinerario giornaliero (es. "Volo di andata"), DEVI impostare il suo "costEstimate" a 0 in quella specifica attività. Il costo reale del volo deve essere valorizzato ESCLUSIVAMENTE nella sezione finale "flights" e nel "budgetBreakdown" per evitare che venga conteggiato due volte.
 
 13. LUOGO ATTIVITÀ: Per ogni attività nell'itinerario, DEVI specificare il luogo esatto ("location") in cui si svolge (es. "Milano", "Roma", "Parigi").
 
@@ -206,8 +206,13 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
       "route": "MXP -> JFK",
       "estimatedPrice": 450,
       "departureTime": "10:30",
+      "arrivalTime": "14:00",
       "duration": "9h 30m",
-      "bookingUrl": "https://www.expedia.it/Flights-Search",
+      "returnDepartureTime": "18:00",
+      "returnArrivalTime": "08:00 (+1)",
+      "returnDuration": "8h 00m",
+      "type": "Più economico",
+      "bookingUrl": "https://www.google.com/travel/flights?q=Flights%20to%20JFK%20from%20MXP",
       "options": ["Opzione tariffaria 1", "Opzione tariffaria 2"]
     }
   ],
@@ -288,20 +293,36 @@ Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: prompt + "\n\nRicorda: SOLO JSON valido, nessun testo extra, nessun blocco markdown.",
+      contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere testo prima o dopo il JSON. Non usare blocchi di codice markdown (```json).",
       config: {
-        temperature: 0.3,
+        temperature: 0.1,
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
       },
     });
 
-    const text = response.text || "";
+    let text = response.text || "";
+    
+    // Rimuovi eventuali blocchi markdown se presenti nonostante il responseMimeType
+    text = text.replace(/^```json\s*/, "").replace(/```$/, "").trim();
+    
     let json;
     try {
       json = JSON.parse(text);
     } catch (e) {
-      throw new Error("L'AI non ha restituito un JSON valido. Riprova.");
+      console.error("Errore parsing JSON AI. Testo ricevuto:", text);
+      // Tentativo estremo: cerca di estrarre il primo { e l'ultimo }
+      try {
+        const start = text.indexOf("{");
+        const end = text.lastIndexOf("}");
+        if (start !== -1 && end !== -1) {
+          json = JSON.parse(text.substring(start, end + 1));
+        } else {
+          throw e;
+        }
+      } catch (e2) {
+        throw new Error("L'AI non ha restituito un JSON valido. Riprova.");
+      }
     }
     
     onProgress?.("Finalizzo i dettagli del viaggio...");

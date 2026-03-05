@@ -287,7 +287,7 @@ Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
     onProgress?.(inputs.modificationRequest ? "Aggiorno l'itinerario..." : "Costruisco l'itinerario personalizzato...");
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       contents: prompt + "\n\nRicorda: SOLO JSON valido, nessun testo extra, nessun blocco markdown.",
       config: {
         temperature: 0.3,

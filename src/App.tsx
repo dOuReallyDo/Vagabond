@@ -38,7 +38,7 @@ const getImageUrl = (item: any, keyword: string) => {
   // Usiamo un seed basato sul nome per avere immagini consistenti ma diverse tra loro
   const seed = Math.abs(keyword.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % 1000;
   
-  return `https://loremflickr.com/800/600/${kw},travel/all?lock=${seed}`;
+  return `https://loremflickr.com/800/600/${kw},landscape/all?lock=${seed}`;
 };
 
 const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -46,7 +46,7 @@ const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   if (!target.dataset.fallback) {
     target.dataset.fallback = '1';
     const seed = Math.floor(Math.random() * 1000);
-    target.src = `https://loremflickr.com/800/600/travel,landscape/all?lock=${seed}`;
+    target.src = `https://loremflickr.com/800/600/landscape,nature/all?lock=${seed}`;
   }
 };
 
@@ -1378,7 +1378,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
       {/* Left Side - Image & Branding */}
       <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col justify-end p-8 md:p-16 overflow-hidden">
         <img 
-          src={`https://loremflickr.com/1080/1920/travel,landscape/all?lock=${bgSeed}`} 
+          src={`https://loremflickr.com/1080/1920/landscape,nature/all?lock=${bgSeed}`} 
           alt="Travel Inspiration" 
           className="absolute inset-0 w-full h-full object-cover"
         />

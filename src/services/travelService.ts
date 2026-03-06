@@ -3,17 +3,17 @@ import { GoogleGenAI } from "@google/genai";
 
 export type { TravelInputs };
 
-export type ProgressCallback = (step: string, detail?: string) => void;
+export type ProgressCallback = (step: string, progress: number) => void;
 
 export const generateTravelPlan = async (
   inputs: TravelInputs,
   onProgress?: ProgressCallback
 ): Promise<TravelPlan> => {
-  onProgress?.("Inizializzazione richiesta...");
+  onProgress?.("Inizializzazione richiesta...", 5);
 
   try {
     // 1. Get API Key
-    onProgress?.("Verifica configurazione...");
+    onProgress?.("Verifica configurazione...", 10);
     
     // First try to get key from server (which reads process.env)
     let apiKey = "";
@@ -60,7 +60,7 @@ export const generateTravelPlan = async (
          throw new Error("Configurazione incompleta: API Key non trovata. Contatta l'amministratore.");
     }
 
-    onProgress?.("Analizzo la destinazione e il periodo...");
+    onProgress?.("Analizzo la destinazione e il periodo...", 20);
 
     const ai = new GoogleGenAI({ apiKey });
 
@@ -78,6 +78,8 @@ export const generateTravelPlan = async (
       d.setDate(d.getDate() + i);
       return `- Giorno ${i + 1}: ${d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}`;
     }).join('\n');
+
+    onProgress?.("Preparazione prompt...", 30);
 
     let prompt = `
 Sei un esperto agente di viaggi con profonda conoscenza locale. Pianifica un viaggio REALE e CONCRETO.
@@ -127,13 +129,14 @@ Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, l
 
 13. LUOGO ATTIVITÀ: Per ogni attività nell'itinerario, DEVI specificare il luogo esatto ("location") in cui si svolge (es. "Milano", "Roma", "Parigi").
 
-14. BREVITÀ OBBLIGATORIA (CRITICO): Per evitare errori di superamento del limite di token (8192 tokens):
-- Mantieni TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) ESTREMAMENTE SINTETICHE (massimo 5-10 parole). Sii telegrafico, vai dritto al punto.
-- Limita le "attractions" in "destinationOverview" a massimo 3.
-- Limita i "travelBlogs" a massimo 2.
-- Limita i "localTips" a massimo 3.
-- Ometti i campi "sourceUrl", "imageUrl", "lat" e "lng" per le attività dell'itinerario (l'app farà un fallback automatico a Google Search e non usa le coordinate delle attività).
-- Se il viaggio supera i 7 giorni: riduci le attività giornaliere a 3 (mattina, pomeriggio, sera) accorpando i pasti; ometti i ristoranti dall'itinerario giornaliero; ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel. Sii estremamente telegrafico.
+14. BREVITÀ ESTREMA (CRITICO): Per evitare errori di troncamento del JSON:
+- Mantieni TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) a MASSIMO 5 parole. Sii telegrafico.
+- Limita le "attractions" a massimo 2.
+- Limita i "travelBlogs" a massimo 1.
+- Limita i "localTips" a massimo 2.
+- Ometti i campi "sourceUrl", "imageUrl", "lat" e "lng" per le attività dell'itinerario.
+- Se il viaggio supera i 4 giorni: riduci le attività giornaliere a 3 (Mattina, Pomeriggio, Sera) accorpando i pasti; ometti i ristoranti dall'itinerario giornaliero; ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel.
+- Non aggiungere mai commenti o testo extra fuori dal JSON.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
@@ -329,24 +332,24 @@ ${JSON.stringify(inputs.previousPlan)}
 L'utente ha richiesto le seguenti modifiche o aggiunte:
 "${inputs.modificationRequest}"
 
-Aggiorna il piano di viaggio tenendo conto di queste richieste. Mantieni la stessa struttura JSON esatta e le stesse REGOLE ASSOLUTE.
-CRITICO: Per evitare errori di superamento del limite di token (8192 tokens), DEVI mantenere TUTTE le descrizioni ESTREMAMENTE SINTETICHE (massimo 5-10 parole). Ometti i campi "sourceUrl", "imageUrl", "lat" e "lng" per le attività dell'itinerario. Se il viaggio supera i 7 giorni, riduci le attività giornaliere a 3 (mattina, pomeriggio, sera) e ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel.
-Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
+Aggiorna il piano di viaggio tenendo conto di queste richieste. Mantieni la stessa struttura JSON esatta e le stesse REGOLE ASSOLUTE. DEVI includere TUTTI i campi (anche reviewSummary, rating, address, etc.).
+CRITICO: Per evitare errori di troncamento del JSON: DEVI mantenere TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) a MASSIMO 5 parole. Ometti i campi "sourceUrl", "imageUrl", "lat" e "lng" per le attività dell'itinerario. Se il viaggio supera i 4 giorni, riduci le attività giornaliere a 3 (Mattina, Pomeriggio, Sera) e ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel.
+Restituisci SOLO il JSON aggiornato.
 `;
     }
 
-    onProgress?.(inputs.modificationRequest ? "Aggiorno l'itinerario..." : "Costruisco l'itinerario personalizzato...");
+    onProgress?.(inputs.modificationRequest ? "Aggiorno l'itinerario..." : "Ricerca voli, alloggi e attrazioni...", 45);
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere testo prima o dopo il JSON. Non usare blocchi di codice markdown (```json).",
       config: {
         temperature: 0.1,
-        responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
       },
     });
 
+    onProgress?.("Elaborazione dati ricevuti...", 85);
     let text = response.text || "";
     
     // Rimuovi eventuali blocchi markdown se presenti nonostante il responseMimeType
@@ -371,7 +374,7 @@ Restituisci SOLO il JSON aggiornato, includendo tutte le sezioni richieste.
       }
     }
     
-    onProgress?.("Finalizzo i dettagli del viaggio...");
+    onProgress?.("Finalizzazione piano di viaggio...", 95);
 
     // 4. Validate Output
     const validationResult = TravelPlanSchema.safeParse(json);
@@ -413,7 +416,7 @@ Restituisci SOLO un array JSON di stringhe con i nomi delle nazioni in italiano.
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         temperature: 0.1,
@@ -421,7 +424,8 @@ Restituisci SOLO un array JSON di stringhe con i nomi delle nazioni in italiano.
       },
     });
 
-    const text = response.text || "";
+    let text = response.text || "";
+    text = text.replace(/^```json\s*/, "").replace(/```$/, "").trim();
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) {
       return parsed;
@@ -462,19 +466,31 @@ Se l'alloggio NON esiste a "${city}", imposta "exists": false e lascia gli altri
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
+    model: "gemini-2.5-flash",
+    contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere testo prima o dopo il JSON. Non usare blocchi di codice markdown (```json).",
     config: {
       temperature: 0.3,
-      responseMimeType: "application/json",
       tools: [{ googleSearch: {} }],
     },
   });
 
-  const text = response.text || "";
+  let text = response.text || "";
+  // Rimuovi eventuali blocchi markdown
+  text = text.replace(/^```json\s*/, "").replace(/```$/, "").trim();
+  
   try {
     return JSON.parse(text);
   } catch (e) {
+    // Tentativo estremo: cerca di estrarre il primo { e l'ultimo }
+    try {
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      if (start !== -1 && end !== -1) {
+        return JSON.parse(text.substring(start, end + 1));
+      }
+    } catch (e2) {
+      console.error("Errore parsing JSON recensioni:", text);
+    }
     throw new Error("L'AI non ha restituito un JSON valido per le recensioni.");
   }
 };

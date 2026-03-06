@@ -73,7 +73,7 @@ const getSafeLink = (url: string | undefined, name: string, destination?: string
 
 // ─── LOADING SCREEN ─────────────────────────────────────────────────────────
 
-function LoadingScreen({ step }: { step: string }) {
+function LoadingScreen({ step, progress }: { step: string; progress: number }) {
   return (
     <div className="min-h-screen bg-brand-paper flex flex-col items-center justify-center p-6">
       <motion.div
@@ -99,9 +99,23 @@ function LoadingScreen({ step }: { step: string }) {
             transition={{ duration: 0.35 }}
           >
             <h2 className="text-2xl mb-2">{step || 'Pianifico il tuo viaggio...'}</h2>
-            <p className="text-brand-ink/50 text-sm font-sans italic">Vagabond AI sta cercando le migliori opzioni per te</p>
+            <p className="text-brand-ink/50 text-sm font-sans italic mb-8">Vagabond AI sta cercando le migliori opzioni per te</p>
           </motion.div>
         </AnimatePresence>
+
+        {/* Barra di avanzamento */}
+        <div className="w-full bg-brand-ink/5 h-3 rounded-full overflow-hidden mb-4 relative">
+          <motion.div 
+            className="absolute inset-y-0 left-0 bg-brand-accent"
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.5 }}
+          />
+        </div>
+        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">
+          <span>Progresso</span>
+          <span>{progress}%</span>
+        </div>
 
         <div className="mt-12 flex justify-center gap-2">
           {[0, 1, 2].map((i) => (
@@ -250,7 +264,7 @@ function AccommodationReviewer({ stops, onAdd }: { stops: any[]; onAdd?: (hotel:
   return (
     <div className="glass p-8 rounded-[2rem] mt-12 print:hidden">
       <h3 className="text-2xl mb-4 flex items-center gap-2">
-        <Search className="w-5 h-5 text-brand-accent" /> Analizza recensioni alloggio
+        <Search className="w-5 h-5 text-brand-accent" /> Seleziona un nuovo alloggio
       </h3>
       <p className="text-sm text-brand-ink/60 mb-6">
         Inserisci il nome di un alloggio e seleziona la tappa per verificare se esiste e leggere le recensioni.
@@ -1138,9 +1152,11 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                           <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {hotel.address}
                         </p>
                       )}
-                      <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
-                        "{hotel.reviewSummary}"
-                      </p>
+                      {hotel.reviewSummary && (
+                        <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
+                          "{hotel.reviewSummary}"
+                        </p>
+                      )}
                       {(hotel.amenities || []).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-3">
                           {hotel.amenities.slice(0, 3).map((a: string, k: number) => (
@@ -1234,9 +1250,11 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                             <MapPin className="w-3 h-3 shrink-0 mt-0.5" /> {rest.address}
                           </p>
                         )}
-                        <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
-                          "{rest.reviewSummary}"
-                        </p>
+                        {rest.reviewSummary && (
+                          <p className="text-sm text-brand-ink/60 mt-3 italic leading-relaxed line-clamp-2">
+                            "{rest.reviewSummary}"
+                          </p>
+                        )}
                         {rest.mustTry && (
                           <div className="mt-3 bg-orange-50 p-3 rounded-xl">
                             <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-0.5">Da provare</p>
@@ -1813,6 +1831,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
 export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [plan, setPlan] = useState<any>(null);
   const [lastInputs, setLastInputs] = useState<TravelInputs | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1820,10 +1839,14 @@ export default function App() {
   const handleSubmit = async (inputs: TravelInputs) => {
     setLoading(true);
     setLoadingStep('Inizializzazione...');
+    setLoadingProgress(0);
     setError(null);
     try {
       setLastInputs(inputs);
-      const result = await generateTravelPlan(inputs, (step) => setLoadingStep(step));
+      const result = await generateTravelPlan(inputs, (step, progress) => {
+        setLoadingStep(step);
+        setLoadingProgress(progress);
+      });
       setPlan(result);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
@@ -1839,6 +1862,7 @@ export default function App() {
     if (!lastInputs || !plan) return;
     setLoading(true);
     setLoadingStep('Aggiorno l\'itinerario...');
+    setLoadingProgress(0);
     setError(null);
     try {
       const modifiedInputs = {
@@ -1846,7 +1870,10 @@ export default function App() {
         modificationRequest: request,
         previousPlan: plan
       };
-      const result = await generateTravelPlan(modifiedInputs, (step) => setLoadingStep(step));
+      const result = await generateTravelPlan(modifiedInputs, (step, progress) => {
+        setLoadingStep(step);
+        setLoadingProgress(progress);
+      });
       setPlan(result);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
@@ -1857,7 +1884,7 @@ export default function App() {
     }
   };
 
-  if (loading) return <LoadingScreen step={loadingStep} />;
+  if (loading) return <LoadingScreen step={loadingStep} progress={loadingProgress} />;
 
   if (error) {
     return (

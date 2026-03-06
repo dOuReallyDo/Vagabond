@@ -52,9 +52,20 @@ const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 
 // Link sicuri: fallback a Google Search, mai 404
 const getSafeLink = (url: string | undefined, name: string, destination?: string): string => {
+  // Se è un pernottamento, forziamo la ricerca per trovare l'hotel specifico
+  if (name.toLowerCase().includes('pernottamento')) {
+    const query = destination ? `${name} ${destination}` : name;
+    return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  }
+
   if (url && typeof url === 'string' && url.startsWith('http')) {
-    const trusted = ['wikipedia.org', 'tripadvisor', 'booking.com', 'expedia', 'viator', 'lonelyplanet', 'google.com', 'wikimedia'];
-    if (trusted.some((t) => url.includes(t))) return url;
+    const trusted = [
+      'wikipedia.org', 'tripadvisor', 'booking.com', 'expedia', 'viator', 'lonelyplanet', 'google.com', 'wikimedia',
+      'ryanair.com', 'easyjet.com', 'ita-airways.com', 'lufthansa.com', 'emirates.com', 'qatarairways.com', 
+      'delta.com', 'united.com', 'aa.com', 'airfrance.com', 'klm.com', 'flytap.com', 'vueling.com', 'wizzair.com',
+      'britishairways.com', 'turkishairlines.com', 'swiss.com', 'austrian.com', 'brusselsairlines.com'
+    ];
+    if (trusted.some((t) => url.toLowerCase().includes(t))) return url;
   }
   const query = destination ? `${name} ${destination}` : name;
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
@@ -184,21 +195,31 @@ function Badge({ children, color = 'default' }: { children: React.ReactNode; col
   );
 }
 
-function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
+function AccommodationReviewer({ stops, onAdd }: { stops: any[]; onAdd?: (hotel: any, stopIndex: number) => void }) {
   const [name, setName] = useState('');
-  const [city, setCity] = useState('');
+  const [stopIndex, setStopIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !city) return;
+    if (!name || stopIndex === undefined) return;
+    
+    const selectedStop = stops[stopIndex];
+    if (!selectedStop) return;
+
     setLoading(true);
     setError(null);
+    setResult(null);
     try {
-      const data = await summarizeAccommodationReviews(name, city);
-      setResult(data);
+      const data = await summarizeAccommodationReviews(name, selectedStop.stopName);
+      
+      if (data.exists === false) {
+        setError(`L'alloggio "${name}" non sembra esistere a ${selectedStop.stopName}. Per favore verifica il nome o la tappa.`);
+      } else {
+        setResult(data);
+      }
     } catch (err: any) {
       setError(err.message || "Errore durante la ricerca delle recensioni.");
     } finally {
@@ -207,7 +228,7 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
   };
 
   const handleAdd = () => {
-    if (onAdd && result) {
+    if (onAdd && result && stopIndex !== undefined) {
       onAdd({
         name: name,
         type: "Hotel",
@@ -217,13 +238,12 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
         pros: result.pros,
         cons: result.cons,
         estimatedPricePerNight: 100,
-        bookingUrl: `https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(city)}`,
-        address: city,
+        bookingUrl: `https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(stops[stopIndex].stopName)}`,
+        address: stops[stopIndex].stopName,
         amenities: []
-      });
+      }, stopIndex);
       setResult(null);
       setName('');
-      setCity('');
     }
   };
 
@@ -233,7 +253,7 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
         <Search className="w-5 h-5 text-brand-accent" /> Analizza recensioni alloggio
       </h3>
       <p className="text-sm text-brand-ink/60 mb-6">
-        Inserisci il nome di un alloggio per cercare recensioni su Booking e TripAdvisor.
+        Inserisci il nome di un alloggio e seleziona la tappa per verificare se esiste e leggere le recensioni.
       </p>
       <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mb-6">
         <input
@@ -244,28 +264,45 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
           className="flex-1 bg-white border border-brand-ink/10 rounded-xl px-4 py-3 text-sm focus:border-brand-accent outline-none"
           required
         />
-        <input
-          type="text"
-          placeholder="Città (es. Roma)"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          className="flex-1 bg-white border border-brand-ink/10 rounded-xl px-4 py-3 text-sm focus:border-brand-accent outline-none"
+        <select
+          value={stopIndex}
+          onChange={(e) => setStopIndex(parseInt(e.target.value))}
+          className="flex-1 bg-white border border-brand-ink/10 rounded-xl px-4 py-3 text-sm focus:border-brand-accent outline-none appearance-none cursor-pointer"
           required
-        />
+        >
+          {stops.map((stop, idx) => (
+            <option key={idx} value={idx}>
+              {stop.stopName}
+            </option>
+          ))}
+        </select>
         <button
           type="submit"
           disabled={loading}
           className="bg-brand-accent text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-brand-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          Cerca
+          Verifica
         </button>
       </form>
 
-      {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }} 
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-start gap-3 mb-6"
+        >
+          <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <p className="text-red-700 text-sm">{error}</p>
+        </motion.div>
+      )}
 
       {result && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl p-6 border border-brand-ink/5">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            <h4 className="font-bold text-brand-ink">Alloggio trovato a {stops[stopIndex].stopName}</h4>
+          </div>
           <p className="text-sm leading-relaxed mb-6">{result.summary}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
@@ -294,7 +331,7 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
               <h4 className="text-xs font-bold uppercase tracking-widest text-brand-ink/40 mb-3">Cerca su</h4>
               <div className="flex flex-wrap gap-3">
                 <a
-                  href={`https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
+                  href={`https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(stops[stopIndex].stopName)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
@@ -302,7 +339,7 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
                   Booking.com <ExternalLink className="w-3 h-3" />
                 </a>
                 <a
-                  href={`https://www.google.com/search?q=tripadvisor+${encodeURIComponent(name)}+${encodeURIComponent(city)}`}
+                  href={`https://www.google.com/search?q=tripadvisor+${encodeURIComponent(name)}+${encodeURIComponent(stops[stopIndex].stopName)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
@@ -316,7 +353,7 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
                 onClick={handleAdd}
                 className="bg-brand-accent text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-brand-accent/90 transition-colors flex items-center justify-center gap-2"
               >
-                <Plus className="w-4 h-4" /> Aggiungi agli alloggi
+                <Plus className="w-4 h-4" /> Aggiungi alla tappa
               </button>
             )}
           </div>
@@ -328,21 +365,35 @@ function AccommodationReviewer({ onAdd }: { onAdd?: (hotel: any) => void }) {
 
 // ─── RESULTS VIEW ─────────────────────────────────────────────────────────────
 
-function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void }) {
+function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void; onUpdatePlan: (plan: any) => void }) {
   const [modifyText, setModifyText] = useState("");
   const [selectedAccommodations, setSelectedAccommodations] = useState<Record<number, any>>({});
   const [accommodationNights, setAccommodationNights] = useState<Record<number, number>>({});
-  const [selectedFlight, setSelectedFlight] = useState<any>(null);
+  const [selectedFlights, setSelectedFlights] = useState<Record<number, any>>({});
   const heroUrl = getImageUrl({ imageUrl: plan.destinationOverview?.heroImageUrl }, plan.destinationOverview?.title + ' landscape');
 
-  // Inizializza le notti con i valori suggeriti dal piano
+  // Inizializza le notti e le selezioni con i valori suggeriti dal piano
   useEffect(() => {
     if (plan?.accommodations) {
       const initialNights: Record<number, number> = {};
+      const initialAccommodations: Record<number, any> = {};
       plan.accommodations.forEach((stop: any, i: number) => {
         initialNights[i] = stop.nights || 1;
+        if (stop.options && stop.options.length > 0) {
+          initialAccommodations[i] = stop.options[0];
+        }
       });
       setAccommodationNights(initialNights);
+      setSelectedAccommodations(initialAccommodations);
+    }
+    if (plan?.flights) {
+      const initialFlights: Record<number, any> = {};
+      plan.flights.forEach((segment: any, i: number) => {
+        if (segment.options && segment.options.length > 0) {
+          initialFlights[i] = segment.options[0];
+        }
+      });
+      setSelectedFlights(initialFlights);
     }
   }, [plan]);
 
@@ -407,7 +458,9 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
     return sum + (hotel.estimatedPricePerNight * nights);
   }, 0);
 
-  const totalFlightCost = selectedFlight ? (selectedFlight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)) : 0;
+  const totalFlightCost = Object.values(selectedFlights).reduce((sum: number, flight: any) => {
+    return sum + (flight.estimatedPrice * (inputs.people.adults + inputs.people.children.length));
+  }, 0);
 
   const totalCost = totalActivitiesCost + totalAccommodationsCost + totalFlightCost;
 
@@ -440,17 +493,17 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
         });
       });
 
-      // Aggiungi il volo selezionato
-      if (selectedFlight) {
+      // Aggiungi i voli selezionati
+      Object.values(selectedFlights).forEach((flight: any, idx: number) => {
         rows.push({
-          'Data / Ora': 'Volo Selezionato',
+          'Data / Ora': `Volo Selezionato ${idx + 1}`,
           'Luogo': '-',
-          'Attività': `${selectedFlight.airline} (${selectedFlight.route})`,
-          'Durata': selectedFlight.duration || '-',
-          'Costo Stimato': selectedFlight.estimatedPrice * numPeople,
-          'Note Costo': `€${selectedFlight.estimatedPrice} x ${numPeople} pers.`
+          'Attività': `${flight.airline} (${flight.route})`,
+          'Durata': flight.duration || '-',
+          'Costo Stimato': flight.estimatedPrice * numPeople,
+          'Note Costo': `€${flight.estimatedPrice} x ${numPeople} pers.`
         });
-      }
+      });
 
       // Aggiungi gli alloggi selezionati
       if (Object.keys(selectedAccommodations).length > 0) {
@@ -774,7 +827,12 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                       href={getSafeLink(act.sourceUrl, act.name || act.description, searchDestination)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group bg-white rounded-3xl border border-brand-ink/5 p-6 hover:shadow-md transition-all block"
+                      className={cn(
+                        "group bg-white rounded-3xl border p-6 hover:shadow-md transition-all block",
+                        act.name?.toLowerCase().includes('pernottamento') 
+                          ? "border-brand-accent/20 bg-brand-accent/5" 
+                          : "border-brand-ink/5"
+                      )}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -785,13 +843,19 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                             </span>
                           )}
                         </div>
-                        {act.costEstimate !== undefined && (
+                        {act.name?.toLowerCase().includes('pernottamento') && (
+                          <Hotel className="w-4 h-4 text-brand-accent" />
+                        )}
+                        {act.costEstimate !== undefined && !act.name?.toLowerCase().includes('pernottamento') && (
                           <span className="text-sm font-bold text-brand-accent">
                             {act.costEstimate === 0 ? 'Gratis' : `€${act.costEstimate}`}
                           </span>
                         )}
                       </div>
-                      {act.name && <h4 className="text-lg font-serif mb-2 leading-tight group-hover:text-brand-accent transition-colors">{act.name}</h4>}
+                      {act.name && <h4 className={cn(
+                        "text-lg font-serif mb-2 leading-tight group-hover:text-brand-accent transition-colors",
+                        act.name?.toLowerCase().includes('pernottamento') && "text-brand-accent"
+                      )}>{act.name}</h4>}
                       {act.location && (
                         <p className="text-xs text-brand-accent mb-2 flex items-center gap-1 font-medium">
                           <MapPin className="w-3 h-3" /> {act.location}
@@ -855,7 +919,7 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
               <p className="text-brand-ink/50 font-sans text-sm">Prezzi indicativi — verifica disponibilità sulle piattaforme di prenotazione</p>
             </div>
             <a
-              href={`https://www.google.com/travel/flights?q=Flights%20to%20${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}%20from%20${encodeURIComponent(inputs?.departureCity || '')}%20on%20${inputs?.startDate || ''}%20through%20${inputs?.endDate || ''}`}
+              href={`https://www.google.com/flights?q=flights+from+${encodeURIComponent(inputs?.departureCity || '')}+to+${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}+on+${inputs?.startDate || ''}+return+${inputs?.endDate || ''}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 bg-blue-50 text-blue-600 px-6 py-3 rounded-full font-bold text-sm hover:bg-blue-100 transition-colors"
@@ -863,129 +927,149 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
               Cerca su Google Flights <ExternalLink className="w-4 h-4" />
             </a>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {(plan.flights || []).map((flight: any, i: number) => (
-              <div
-                key={i}
-                className={cn("glass p-7 rounded-3xl hover:shadow-md transition-all group block relative border-2",
-                  selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? "border-brand-accent ring-4 ring-brand-accent/10" : "border-transparent"
+          <div className="space-y-12">
+            {(plan.flights || []).map((segment: any, segmentIdx: number) => (
+              <div key={segmentIdx}>
+                {segment.segmentName && (
+                  <h3 className="text-2xl font-serif mb-6 flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-full bg-brand-accent/10 text-brand-accent flex items-center justify-center text-sm font-bold">
+                      {segmentIdx + 1}
+                    </span>
+                    {segment.segmentName}
+                  </h3>
                 )}
-              >
-                {flight.type && (
-                  <div className="absolute -top-3 left-6 bg-brand-ink text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-sm">
-                    {flight.type}
-                  </div>
-                )}
-                
-                {selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route && (
-                  <div className="absolute top-4 right-4 bg-brand-accent text-white p-1 rounded-full z-10">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {(segment.options || []).map((flight: any, i: number) => {
+                    const isSelected = selectedFlights[segmentIdx]?.airline === flight.airline && selectedFlights[segmentIdx]?.route === flight.route;
+                    return (
+                      <div
+                        key={i}
+                        className={cn("glass p-7 rounded-3xl hover:shadow-md transition-all group block relative border-2",
+                          isSelected ? "border-brand-accent ring-4 ring-brand-accent/10" : "border-transparent"
+                        )}
+                      >
+                        {flight.type && (
+                          <div className="absolute -top-3 left-6 bg-brand-ink text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-sm">
+                            {flight.type}
+                          </div>
+                        )}
+                        
+                        {isSelected && (
+                          <div className="absolute top-4 right-4 bg-brand-accent text-white p-1 rounded-full z-10">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </div>
+                        )}
 
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <p className="font-bold text-xl text-brand-ink">{flight.airline}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-brand-ink/40 text-xs font-mono uppercase tracking-wider">{flight.route.split('->')[0].trim()}</span>
-                      <div className="h-[1px] w-8 bg-brand-ink/10 relative">
-                        <Plane className="w-2 h-2 absolute -top-1 left-1/2 -translate-x-1/2 text-brand-ink/20" />
-                      </div>
-                      <span className="text-brand-ink/40 text-xs font-mono uppercase tracking-wider">{flight.route.split('->')[1]?.trim()}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-brand-accent">€{flight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)}</p>
-                    <p className="text-[10px] text-brand-ink/40 font-bold uppercase tracking-tighter">Totale per {inputs.people.adults + inputs.people.children.length} pers.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4 py-4 border-y border-brand-ink/5 mb-4">
-                  {/* Outbound */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-blue-50 rounded-lg">
-                        <Plane className="w-3 h-3 text-blue-600" />
-                      </div>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">Andata</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Partenza</p>
-                        <p className="text-sm font-bold text-brand-ink">{flight.departureTime || '--:--'}</p>
-                      </div>
-                      <div className="text-center px-3 border-x border-brand-ink/5">
-                        <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Durata</p>
-                        <p className="text-[10px] font-medium text-brand-ink/70">{flight.duration || '-'}</p>
-                      </div>
-                      <div className="text-left">
-                        <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Arrivo</p>
-                        <p className="text-sm font-bold text-brand-ink">{flight.arrivalTime || '--:--'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Return */}
-                  {(flight.returnDepartureTime || flight.returnArrivalTime) && (
-                    <div className="flex items-center justify-between pt-4 border-t border-brand-ink/5">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-orange-50 rounded-lg">
-                          <Plane className="w-3 h-3 text-orange-600 rotate-180" />
+                        <div className="flex justify-between items-start mb-6">
+                          <div>
+                            <p className="font-bold text-xl text-brand-ink">{flight.airline}</p>
+                            {flight.date && (
+                              <p className="text-[10px] font-bold text-brand-accent uppercase tracking-widest mt-1">Data: {flight.date}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-brand-ink/40 text-xs font-mono uppercase tracking-wider">{flight.route.split('->')[0].trim()}</span>
+                              <div className="h-[1px] w-8 bg-brand-ink/10 relative">
+                                <Plane className="w-2 h-2 absolute -top-1 left-1/2 -translate-x-1/2 text-brand-ink/20" />
+                              </div>
+                              <span className="text-brand-ink/40 text-xs font-mono uppercase tracking-wider">{flight.route.split('->')[1]?.trim()}</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-brand-accent">€{flight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)}</p>
+                            <p className="text-[10px] text-brand-ink/40 font-bold uppercase tracking-tighter">Totale per {inputs.people.adults + inputs.people.children.length} pers.</p>
+                          </div>
                         </div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">Ritorno</span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Partenza</p>
-                          <p className="text-sm font-bold text-brand-ink">{flight.returnDepartureTime || '--:--'}</p>
-                        </div>
-                        <div className="text-center px-3 border-x border-brand-ink/5">
-                          <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Durata</p>
-                          <p className="text-[10px] font-medium text-brand-ink/70">{flight.returnDuration || '-'}</p>
-                        </div>
-                        <div className="text-left">
-                          <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Arrivo</p>
-                          <p className="text-sm font-bold text-brand-ink">{flight.returnArrivalTime || '--:--'}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
 
-                {(flight.options || []).length > 0 && (
-                  <ul className="space-y-1.5 mb-6">
-                    {flight.options.map((opt: string, j: number) => (
-                      <li key={j} className="text-xs text-brand-ink/60 flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-brand-accent/40 shrink-0" /> {opt}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                        <div className="space-y-4 py-4 border-y border-brand-ink/5 mb-4">
+                          {/* Outbound */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1.5 bg-blue-50 rounded-lg">
+                                <Plane className="w-3 h-3 text-blue-600" />
+                              </div>
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">Andata</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Partenza</p>
+                                <p className="text-sm font-bold text-brand-ink">{flight.departureTime || '--:--'}</p>
+                              </div>
+                              <div className="text-center px-3 border-x border-brand-ink/5">
+                                <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Durata</p>
+                                <p className="text-[10px] font-medium text-brand-ink/70">{flight.duration || '-'}</p>
+                              </div>
+                              <div className="text-left">
+                                <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Arrivo</p>
+                                <p className="text-sm font-bold text-brand-ink">{flight.arrivalTime || '--:--'}</p>
+                              </div>
+                            </div>
+                          </div>
 
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setSelectedFlight(flight)}
-                    className={cn("flex-1 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2",
-                      selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route 
-                        ? "bg-brand-accent text-white shadow-lg shadow-brand-accent/20" 
-                        : "bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5"
-                    )}
-                  >
-                    {selectedFlight?.airline === flight.airline && selectedFlight?.route === flight.route ? (
-                      <><CheckCircle2 className="w-4 h-4" /> Volo Selezionato</>
-                    ) : (
-                      'Seleziona questo volo'
-                    )}
-                  </button>
-                  <a 
-                    href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="p-3 rounded-2xl bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5 transition-colors"
-                    title="Vedi su Google Flights"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                          {/* Return */}
+                          {(flight.returnDepartureTime || flight.returnArrivalTime) && (
+                            <div className="flex items-center justify-between pt-4 border-t border-brand-ink/5">
+                              <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-orange-50 rounded-lg">
+                                  <Plane className="w-3 h-3 text-orange-600 rotate-180" />
+                                </div>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">Ritorno</span>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Partenza</p>
+                                  <p className="text-sm font-bold text-brand-ink">{flight.returnDepartureTime || '--:--'}</p>
+                                </div>
+                                <div className="text-center px-3 border-x border-brand-ink/5">
+                                  <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Durata</p>
+                                  <p className="text-[10px] font-medium text-brand-ink/70">{flight.returnDuration || '-'}</p>
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-xs text-brand-ink/40 uppercase font-bold leading-none mb-1">Arrivo</p>
+                                  <p className="text-sm font-bold text-brand-ink">{flight.returnArrivalTime || '--:--'}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {(flight.options || []).length > 0 && (
+                          <ul className="space-y-1.5 mb-6">
+                            {flight.options.map((opt: string, j: number) => (
+                              <li key={j} className="text-xs text-brand-ink/60 flex items-center gap-2">
+                                <div className="w-1 h-1 rounded-full bg-brand-accent/40 shrink-0" /> {opt}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        <div className="flex items-center gap-3">
+                          <button 
+                            onClick={() => setSelectedFlights(prev => ({ ...prev, [segmentIdx]: flight }))}
+                            className={cn("flex-1 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2",
+                              isSelected 
+                                ? "bg-brand-accent text-white shadow-lg shadow-brand-accent/20" 
+                                : "bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5"
+                            )}
+                          >
+                            {isSelected ? (
+                              <><CheckCircle2 className="w-4 h-4" /> Volo Selezionato</>
+                            ) : (
+                              'Seleziona questo volo'
+                            )}
+                          </button>
+                          <a 
+                            href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="p-3 rounded-2xl bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5 transition-colors"
+                            title="Vedi su Google Flights"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -995,9 +1079,9 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
         {/* ALLOGGI */}
         <section className="mb-20">
           <h2 className="text-4xl mb-2 flex items-center gap-3">
-            <Hotel className="w-7 h-7" /> Alloggi consigliati
+            <Hotel className="w-7 h-7" /> Alloggi scelti
           </h2>
-          <p className="text-brand-ink/50 mb-10 font-sans text-sm">Strutture selezionate in base alle tue preferenze</p>
+          <p className="text-brand-ink/50 mb-10 font-sans text-sm">Le strutture selezionate per il tuo pernottamento</p>
           <div className="space-y-14">
             {(plan.accommodations || []).map((stop: any, i: number) => (
               <div key={i}>
@@ -1094,32 +1178,30 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
               </div>
             ))}
           </div>
-          <AccommodationReviewer onAdd={(hotel) => {
-            // Trova la tappa corretta in base alla città
-            const stopIndex = plan.accommodations.findIndex((stop: any) => 
-              stop.stopName.toLowerCase().includes(hotel.address.toLowerCase()) || 
-              hotel.address.toLowerCase().includes(stop.stopName.toLowerCase())
-            );
-            
-            if (stopIndex !== -1) {
-              // Aggiungi l'hotel alle opzioni di quella tappa
+          <AccommodationReviewer 
+            stops={plan.accommodations || []}
+            onAdd={(hotel, stopIndex) => {
+              // Aggiungi l'hotel alle opzioni della tappa selezionata
               const updatedPlan = { ...plan };
-              updatedPlan.accommodations[stopIndex].options.push(hotel);
-              // Seleziona automaticamente l'hotel appena aggiunto
-              setSelectedAccommodations(prev => ({ ...prev, [stopIndex]: hotel }));
-              alert(`Alloggio aggiunto e selezionato per la tappa: ${plan.accommodations[stopIndex].stopName}`);
-            } else {
-              // Se non trova una corrispondenza esatta, lo aggiunge alla prima tappa
-              const updatedPlan = { ...plan };
-              if (updatedPlan.accommodations && updatedPlan.accommodations.length > 0) {
-                updatedPlan.accommodations[0].options.push(hotel);
-                setSelectedAccommodations(prev => ({ ...prev, [0]: hotel }));
-                alert(`Alloggio aggiunto e selezionato per la tappa: ${plan.accommodations[0].stopName} (Città non trovata esattamente)`);
+              if (updatedPlan.accommodations && updatedPlan.accommodations[stopIndex]) {
+                // Crea una copia profonda della tappa per non mutare lo stato direttamente
+                const updatedAccommodations = [...updatedPlan.accommodations];
+                const updatedStop = { ...updatedAccommodations[stopIndex] };
+                updatedStop.options = [...updatedStop.options, hotel];
+                updatedAccommodations[stopIndex] = updatedStop;
+                updatedPlan.accommodations = updatedAccommodations;
+                
+                // Aggiorna lo stato globale
+                onUpdatePlan(updatedPlan);
+                
+                // Seleziona automaticamente l'hotel appena aggiunto
+                setSelectedAccommodations(prev => ({ ...prev, [stopIndex]: hotel }));
+                alert(`Alloggio aggiunto e selezionato per la tappa: ${plan.accommodations[stopIndex].stopName}`);
               } else {
-                alert("Nessuna tappa trovata nell'itinerario per aggiungere l'alloggio.");
+                alert("Errore nell'aggiunta dell'alloggio: tappa non valida.");
               }
-            }
-          }} />
+            }} 
+          />
         </section>
 
         {/* RISTORANTI */}
@@ -1281,24 +1363,26 @@ function ResultsView({ plan, inputs, onReset, onModify }: { plan: any; inputs: a
                         })}
                       </React.Fragment>
                     ))}
-                    {selectedFlight && (
+                    {Object.keys(selectedFlights).length > 0 && (
                       <>
                         <tr className="bg-brand-paper/20">
                           <td colSpan={5} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
-                            Volo Selezionato
+                            Voli Selezionati
                           </td>
                         </tr>
-                        <tr className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
-                          <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">-</td>
-                          <td className="p-4 text-brand-ink/60 whitespace-nowrap">-</td>
-                          <td className="p-4 font-medium">
-                            {selectedFlight.airline} <span className="text-xs text-brand-ink/40 font-normal">({selectedFlight.route})</span>
-                          </td>
-                          <td className="p-4 text-brand-ink/60 whitespace-nowrap">{selectedFlight.duration || '-'}</td>
-                          <td className="p-4 text-right font-medium whitespace-nowrap">
-                            €{selectedFlight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)} <span className="text-xs text-brand-ink/40 font-normal">(€{selectedFlight.estimatedPrice} x {inputs.people.adults + inputs.people.children.length} pers.)</span>
-                          </td>
-                        </tr>
+                        {Object.entries(selectedFlights).map(([idx, flight]: [string, any]) => (
+                          <tr key={`flight-${idx}`} className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
+                            <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">{flight.date || '-'}</td>
+                            <td className="p-4 text-brand-ink/60 whitespace-nowrap">-</td>
+                            <td className="p-4 font-medium">
+                              {flight.airline} <span className="text-xs text-brand-ink/40 font-normal">({flight.route})</span>
+                            </td>
+                            <td className="p-4 text-brand-ink/60 whitespace-nowrap">{flight.duration || '-'}</td>
+                            <td className="p-4 text-right font-medium whitespace-nowrap">
+                              €{flight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)} <span className="text-xs text-brand-ink/40 font-normal">(€{flight.estimatedPrice} x {inputs.people.adults + inputs.people.children.length} pers.)</span>
+                            </td>
+                          </tr>
+                        ))}
                       </>
                     )}
                     {Object.keys(selectedAccommodations).length > 0 && (
@@ -1790,7 +1874,7 @@ export default function App() {
     );
   }
 
-  if (plan) return <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} />;
+  if (plan) return <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} />;
 
   return <FormView onSubmit={handleSubmit} loading={loading} />;
 }

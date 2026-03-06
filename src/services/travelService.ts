@@ -119,9 +119,9 @@ Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, l
 
 9. METEO (CLIMA E VIAGGI): Per la sezione "weatherInfo", DEVI cercare su Google "clima e viaggi ${inputs.destination}" ed estrarre le informazioni ESATTE da quel sito per il mese del viaggio. Riassumi le temperature, il clima, i pro e i contro basandoti esclusivamente su quella fonte.
 
-10. VOLI (GOOGLE FLIGHTS): Genera almeno 2 opzioni di volo realistiche. Tieni conto della preferenza dell'utente: "${inputs.flightPreference}". Per ogni volo DEVI specificare: compagnia, rotta, prezzo stimato, orario di partenza/arrivo/durata per l'ANDATA e orario di partenza/arrivo/durata per il RITORNO, e un tag "type" (es. "Più economico", "Più veloce", "Consigliato"). Il link di prenotazione (\`bookingUrl\`) DEVE essere un link a Google Flights con i parametri corretti. Tieni conto dell'orario di partenza preferito (${inputs.departureTimePreference}) se specificato.
+10. VOLI: Se l'itinerario prevede più voli (es. stopover, voli interni, multi-tratta), DEVI coprire l'INTERO viaggio assicurandoti che l'utente possa SEMPRE ritornare alla città di partenza (${inputs.departureCity}). Per ogni segmento di volo (es. 'Volo 1: Milano - Lisbona', 'Volo 2: Lisbona - Boa Vista'), fornisci i dettagli di ANDATA e, se l'itinerario prevede il ritorno in quella città, anche del RITORNO. Se l'itinerario è circolare o multi-tappa senza ritorni intermedi, usa voli 'Solo andata' per ogni tratta fino al rientro finale a ${inputs.departureCity}. Esempio: se fai Milano-Lisbona-Boa Vista-Milano, puoi presentare 3 voli solo andata oppure 2 voli andata/ritorno se la logica lo consente (es. MIL-LIS A/R e LIS-BVC A/R). Scegli la struttura più logica per l'itinerario proposto. Ogni segmento DEVE avere almeno 2 alternative reali. Per ogni opzione di volo DEVI specificare obbligatoriamente la DATA prevista del volo nel campo \`date\` (formato DD/MM/YYYY). Il link \`bookingUrl\` DEVE ESSERE il link diretto al sito ufficiale della compagnia aerea specifica (es. https://www.ita-airways.com, https://www.flytap.com, https://www.ryanair.com, etc.) e NON a Google Flights o altri aggregatori. Tieni conto dell'orario di partenza preferito (${inputs.departureTimePreference}) se specificato.
 
-11. ALLOGGI E NOTTI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa. ATTENZIONE: La somma totale delle notti in hotel + le eventuali notti in volo (es. volo notturno) DEVE COINCIDERE ESATTAMENTE con il numero di notti del periodo specificato (${totalDays - 1} notti totali). Se si ipotizza di stare più notti nella stessa tappa, l'hotel/accommodation resta la stessa e indichi il numero di notti totale per quella tappa.
+11. ALLOGGI E NOTTI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa. ATTENZIONE: La somma totale delle notti in hotel + le eventuali notti in volo (es. volo notturno) DEVE COINCIDERE ESATTAMENTE con il numero di notti del periodo specificato (${totalDays - 1} notti totali). Deve essere chiarissimo dove l'utente pernotta ogni singola notte del viaggio. Per questo motivo, OGNI GIORNO dell'itinerario (tranne l'ultimo se si rientra in giornata) DEVE terminare con un'attività chiamata "Pernottamento: [Nome Hotel]" (es. "Pernottamento: Hotel Ritz"). Il nome dell'hotel deve essere reale e specifico. Nella sezione "accommodations", DEVI inserire come UNICA opzione per ogni tappa proprio l'hotel che hai scelto per il pernottamento nell'itinerario giornaliero di quella tappa. Se si ipotizza di stare più notti nella stessa tappa, l'hotel resta lo stesso.
 
 12. COSTI: I costi di voli, treni e attività devono essere indicati PER PERSONA. Il costo degli hotel deve essere indicato PER CAMERA a notte. Il budget totale ("budgetBreakdown") deve tenere conto del numero di persone (${inputs.people.adults} adulti e ${inputs.people.children.length} bambini). IMPORTANTE: Se inserisci il volo come attività nell'itinerario giornaliero (es. "Volo di andata"), DEVI impostare il suo "costEstimate" a 0 in quella specifica attività. Il costo reale del volo deve essere valorizzato ESCLUSIVAMENTE nella sezione finale "flights" e nel "budgetBreakdown" per evitare che venga conteggiato due volte.
 
@@ -202,18 +202,64 @@ Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura
   },
   "flights": [
     {
-      "airline": "Nome compagnia aerea reale",
-      "route": "MXP -> JFK",
-      "estimatedPrice": 450,
-      "departureTime": "10:30",
-      "arrivalTime": "14:00",
-      "duration": "9h 30m",
-      "returnDepartureTime": "18:00",
-      "returnArrivalTime": "08:00 (+1)",
-      "returnDuration": "8h 00m",
-      "type": "Più economico",
-      "bookingUrl": "https://www.google.com/travel/flights?q=Flights%20to%20JFK%20from%20MXP",
-      "options": ["Opzione tariffaria 1", "Opzione tariffaria 2"]
+      "segmentName": "Volo 1: Internazionale",
+      "options": [
+        {
+          "airline": "ITA Airways",
+          "route": "MXP -> JFK",
+          "estimatedPrice": 450,
+          "departureTime": "10:30",
+          "arrivalTime": "14:00",
+          "duration": "9h 30m",
+          "returnDepartureTime": "18:00",
+          "returnArrivalTime": "08:00 (+1)",
+          "returnDuration": "8h 00m",
+          "type": "Più economico",
+          "bookingUrl": "https://www.google.com/flights?q=flights+from+MXP+to+JFK+on+2026-04-01+return+2026-04-08",
+          "options": ["Bagaglio a mano incluso", "Cancellazione con penale"]
+        },
+        {
+          "airline": "Delta Air Lines",
+          "route": "MXP -> JFK",
+          "estimatedPrice": 520,
+          "departureTime": "12:00",
+          "arrivalTime": "15:30",
+          "duration": "9h 30m",
+          "returnDepartureTime": "20:00",
+          "returnArrivalTime": "10:00 (+1)",
+          "returnDuration": "8h 00m",
+          "type": "Consigliato",
+          "bookingUrl": "https://www.google.com/flights?q=flights+from+MXP+to+JFK+on+2026-04-01+return+2026-04-08",
+          "options": ["Pasti inclusi", "Wi-Fi a bordo"]
+        }
+      ]
+    },
+    {
+      "segmentName": "Volo 2: Interno",
+      "options": [
+        {
+          "airline": "JetBlue",
+          "route": "JFK -> LAX",
+          "estimatedPrice": 150,
+          "departureTime": "09:00",
+          "arrivalTime": "12:00",
+          "duration": "6h 00m",
+          "type": "Più economico",
+          "bookingUrl": "https://www.google.com/flights?q=flights+from+JFK+to+LAX+on+2026-04-05",
+          "options": ["Diretto"]
+        },
+        {
+          "airline": "United Airlines",
+          "route": "JFK -> LAX",
+          "estimatedPrice": 180,
+          "departureTime": "11:00",
+          "arrivalTime": "14:00",
+          "duration": "6h 00m",
+          "type": "Consigliato",
+          "bookingUrl": "https://www.google.com/flights?q=flights+from+JFK+to+LAX+on+2026-04-05",
+          "options": ["Wi-Fi incluso"]
+        }
+      ]
     }
   ],
   "accommodations": [
@@ -402,14 +448,17 @@ export const summarizeAccommodationReviews = async (name: string, city: string) 
 
   const prompt = `
 Sei un assistente di viaggio esperto. Cerca informazioni e recensioni per l'alloggio "${name}" a "${city}" su siti come Booking.com e TripAdvisor.
-Crea un riassunto delle recensioni (pro e contro principali).
+Verifica se l'alloggio esiste davvero in quella città.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
+  "exists": true,
   "summary": "Riassunto delle recensioni (circa 3-4 frasi)",
   "pros": ["Pro 1", "Pro 2"],
   "cons": ["Contro 1", "Contro 2"]
 }
+
+Se l'alloggio NON esiste a "${city}", imposta "exists": false e lascia gli altri campi vuoti o con un messaggio di errore nel "summary".
 `;
 
   const response = await ai.models.generateContent({

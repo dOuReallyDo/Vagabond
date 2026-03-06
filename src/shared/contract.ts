@@ -95,18 +95,24 @@ export const TravelPlanSchema = z.object({
   }),
   flights: z.array(
     z.object({
-      airline: z.string(),
-      route: z.string(),
-      estimatedPrice: z.number(),
-      options: z.array(z.string()).optional(),
-      departureTime: z.string().optional(),
-      arrivalTime: z.string().optional(),
-      duration: z.string().optional(),
-      returnDepartureTime: z.string().optional(),
-      returnArrivalTime: z.string().optional(),
-      returnDuration: z.string().optional(),
-      type: z.string().optional(),
-      bookingUrl: z.string().optional(),
+      segmentName: z.string(),
+      options: z.array(
+        z.object({
+          airline: z.string(),
+          route: z.string(),
+          estimatedPrice: z.number(),
+          date: z.string().optional(),
+          options: z.array(z.string()).optional(),
+          departureTime: z.string().optional(),
+          arrivalTime: z.string().optional(),
+          duration: z.string().optional(),
+          returnDepartureTime: z.string().optional(),
+          returnArrivalTime: z.string().optional(),
+          returnDuration: z.string().optional(),
+          type: z.string().optional(),
+          bookingUrl: z.string().optional(),
+        })
+      )
     })
   ).optional(),
   accommodations: z.array(

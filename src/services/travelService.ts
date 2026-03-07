@@ -342,7 +342,7 @@ Restituisci SOLO il JSON aggiornato.
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere testo prima o dopo il JSON. Non usare blocchi di codice markdown (```json).",
+      contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere testo prima o dopo il JSON. Non usare blocchi di codice markdown (```json). NON inserire citazioni o riferimenti bibliografici nel testo.",
       config: {
         temperature: 0.1,
         tools: [{ googleSearch: {} }],

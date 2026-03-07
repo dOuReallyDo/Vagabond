@@ -16,20 +16,10 @@ export default defineConfig(({mode}) => {
       },
     },
     build: {
-      lib: {
-        entry: path.resolve(__dirname, 'src/main.tsx'),
-        name: 'VagabondWidget',
-        fileName: (format) => `vagabond-widget.${format}.js`,
-      },
+      outDir: 'dist',
       rollupOptions: {
-        // Ensure external dependencies are not bundled into the library
-        // external: ['react', 'react-dom'], // Commented out to bundle React for standalone usage
-        output: {
-          // Provide global variables to use in the UMD build
-          globals: {
-            react: 'React',
-            'react-dom': 'ReactDOM',
-          },
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
         },
       },
     },
